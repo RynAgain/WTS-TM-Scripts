@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSRF Token Extraction Test</title>
+    
+    <!-- Test Case 1: Meta tag approach -->
+    <meta name="anti-csrftoken-a2z" content="g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw==">
+    
+    <!-- Test Case 2: Script with different formatting variations -->
+    <script>
+        // Variation 1: Standard object notation
+        var csrfData = {
+            "anti-csrftoken-a2z": "g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw=="
+        };
+        
+        // Variation 2: Single quotes
+        var csrfData2 = {
+            'anti-csrftoken-a2z': 'g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw=='
+        };
+        
+        // Variation 3: With extra spaces
+        var csrfData3 = {
+            "anti-csrftoken-a2z"   :   "g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw=="
+        };
+        
+        // Variation 4: In a larger configuration object
+        window.WholeFoodsConfig = {
+            apiEndpoint: "https://api.wholefoodsmarket.com",
+            "anti-csrftoken-a2z": "g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw==",
+            storeId: "10373"
+        };
+    </script>
+</head>
+<body>
+    <!-- Test Case 3: Data attribute approach -->
+    <div id="csrf-container" data-anti-csrftoken-a2z="g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw=="></div>
+    
+    <h1>CSRF Token Extraction Test</h1>
+    <div id="results"></div>
+    <button onclick="testExtraction()">Test Current Implementation</button>
+    <button onclick="testImprovedExtraction()">Test Improved Implementation</button>
+    
+    <script>
+        // Current implementation from WtsMain.js
+        function extractCSRFToken() {
+            console.log("Testing current implementation...");
+            
+            // Look for the token in meta tags first
+            const metaToken = document.querySelector('meta[name="anti-csrftoken-a2z"]');
+            if (metaToken) {
+                console.log("✅ Found token in meta tag:", metaToken.getAttribute('content'));
+                return metaToken.getAttribute('content');
+            }
+
+            // Look for the token in script tags or other elements
+            const scripts = document.querySelectorAll('script');
+            for (const script of scripts) {
+                const content = script.textContent || script.innerText;
+                const tokenMatch = content.match(/["']anti-csrftoken-a2z["']\s*:\s*["']([^"']+)["']/);
+                if (tokenMatch) {
+                    console.log("✅ Found token in script:", tokenMatch[1]);
+                    return tokenMatch[1];
+                }
+            }
+
+            // Look for the token in any element with data attributes
+            const tokenElement = document.querySelector('[data-anti-csrftoken-a2z]');
+            if (tokenElement) {
+                console.log("✅ Found token in data attribute:", tokenElement.getAttribute('data-anti-csrftoken-a2z'));
+                return tokenElement.getAttribute('data-anti-csrftoken-a2z');
+            }
+
+            console.log("❌ No token found");
+            return null;
+        }
+        
+        // Improved implementation with better regex and additional methods
+        function extractCSRFTokenImproved() {
+            console.log("Testing improved implementation...");
+            
+            // Method 1: Meta tag approach
+            const metaToken = document.querySelector('meta[name="anti-csrftoken-a2z"]');
+            if (metaToken) {
+                const token = metaToken.getAttribute('content');
+                console.log("✅ Found token in meta tag:", token);
+                return token;
+            }
+
+            // Method 2: Improved script content search with multiple regex patterns
+            const scripts = document.querySelectorAll('script');
+            const regexPatterns = [
+                // Original pattern
+                /["']anti-csrftoken-a2z["']\s*:\s*["']([^"']+)["']/g,
+                // Pattern for different quote combinations
+                /["']anti-csrftoken-a2z["']\s*:\s*["']([^"']*?)["']/g,
+                // Pattern with escaped quotes
+                /["']anti-csrftoken-a2z["']\s*:\s*["']([^"'\\]*(?:\\.[^"'\\]*)*)["']/g,
+                // Pattern for window object assignments
+                /window\.[^=]*["']anti-csrftoken-a2z["']\s*:\s*["']([^"']+)["']/g
+            ];
+            
+            for (const script of scripts) {
+                const content = script.textContent || script.innerText;
+                
+                for (const pattern of regexPatterns) {
+                    const matches = [...content.matchAll(pattern)];
+                    if (matches.length > 0) {
+                        const token = matches[0][1];
+                        console.log("✅ Found token in script with pattern:", pattern, "Token:", token);
+                        return token;
+                    }
+                }
+            }
+
+            // Method 3: Data attribute approach
+            const tokenElement = document.querySelector('[data-anti-csrftoken-a2z]');
+            if (tokenElement) {
+                const token = tokenElement.getAttribute('data-anti-csrftoken-a2z');
+                console.log("✅ Found token in data attribute:", token);
+                return token;
+            }
+            
+            // Method 4: Check for token in window object
+            if (typeof window !== 'undefined') {
+                // Check common window object patterns
+                const windowChecks = [
+                    () => window.WholeFoodsConfig && window.WholeFoodsConfig['anti-csrftoken-a2z'],
+                    () => window.csrfToken,
+                    () => window['anti-csrftoken-a2z']
+                ];
+                
+                for (const check of windowChecks) {
+                    try {
+                        const token = check();
+                        if (token) {
+                            console.log("✅ Found token in window object:", token);
+                            return token;
+                        }
+                    } catch (e) {
+                        // Ignore errors from window object checks
+                    }
+                }
+            }
+
+            console.log("❌ No token found with improved implementation");
+            return null;
+        }
+        
+        function testExtraction() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h3>Current Implementation Results:</h3>';
+            
+            console.clear();
+            const token = extractCSRFToken();
+            
+            if (token) {
+                results.innerHTML += `<p style="color: green;">✅ Token found: ${token}</p>`;
+                results.innerHTML += `<p>Token length: ${token.length} characters</p>`;
+                results.innerHTML += `<p>Token format appears valid: ${/^[A-Za-z0-9+/]+=*$/.test(token) ? 'Yes' : 'No'}</p>`;
+            } else {
+                results.innerHTML += '<p style="color: red;">❌ No token found</p>';
+            }
+        }
+        
+        function testImprovedExtraction() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<h3>Improved Implementation Results:</h3>';
+            
+            console.clear();
+            const token = extractCSRFTokenImproved();
+            
+            if (token) {
+                results.innerHTML += `<p style="color: green;">✅ Token found: ${token}</p>`;
+                results.innerHTML += `<p>Token length: ${token.length} characters</p>`;
+                results.innerHTML += `<p>Token format appears valid: ${/^[A-Za-z0-9+/]+=*$/.test(token) ? 'Yes' : 'No'}</p>`;
+            } else {
+                results.innerHTML += '<p style="color: red;">❌ No token found</p>';
+            }
+        }
+        
+        // Auto-run tests on page load
+        window.addEventListener('load', () => {
+            console.log("=== CSRF Token Extraction Test ===");
+            testExtraction();
+            setTimeout(() => {
+                testImprovedExtraction();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
