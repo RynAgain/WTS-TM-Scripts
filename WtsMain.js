@@ -3,6 +3,12 @@
 // @namespace    http://tampermonkey.net/
 // @version      1.2
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality
+// @author       WTS-TM-Scripts
+// @homepage     https://github.com/RynAgain/WTS-TM-Scripts
+// @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
+// @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
+// @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
+// @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @match        *://*.wholefoodsmarket.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
