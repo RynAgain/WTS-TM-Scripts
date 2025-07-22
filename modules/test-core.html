@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTS Core Module Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        #output {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WTS Core Module Test</h1>
+        <p>This page tests the WTS Core module functionality in a browser environment.</p>
+        
+        <button onclick="runTest()">Run Core Test</button>
+        <button onclick="clearOutput()">Clear Output</button>
+        
+        <div id="status"></div>
+        <div id="output"></div>
+    </div>
+
+    <script src="wts-core.js"></script>
+    <script src="test-core.js"></script>
+    <script>
+        const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+        
+        // Override console methods to capture output
+        const originalLog = console.log;
+        const originalError = console.error;
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            outputDiv.textContent += args.join(' ') + '\n';
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            outputDiv.textContent += 'ERROR: ' + args.join(' ') + '\n';
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        };
+        
+        async function runTest() {
+            clearOutput();
+            statusDiv.innerHTML = '<div class="status">Running tests...</div>';
+            
+            try {
+                const result = await testWTSCore();
+                
+                if (result) {
+                    statusDiv.innerHTML = '<div class="status success">✅ All tests passed successfully!</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ Some tests failed. Check the output for details.</div>';
+                }
+            } catch (error) {
+                console.error('Test execution failed:', error);
+                statusDiv.innerHTML = '<div class="status error">❌ Test execution failed: ' + error.message + '</div>';
+            }
+        }
+        
+        function clearOutput() {
+            outputDiv.textContent = '';
+            statusDiv.innerHTML = '';
+        }
+        
+        // Auto-run test on page load
+        window.addEventListener('load', () => {
+            console.log('WTS Core Test Page Loaded');
+            console.log('Click "Run Core Test" to test the WTS Core module functionality');
+        });
+    </script>
+</body>
+</html>
