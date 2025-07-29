@@ -85,7 +85,13 @@ class WTS_Core {
     _initializeStorage() {
         this.storage = {
             cache: new Map(),
-            prefix: 'wts_'
+            prefix: 'wts_',
+            // Add convenience methods that delegate to the core methods
+            get: (key, defaultValue) => this.getValue(key, defaultValue),
+            set: (key, value, options) => this.setValue(key, value, options),
+            delete: (key) => this.deleteValue(key),
+            clear: () => this.clearStorage(),
+            keys: () => this.listKeys()
         };
     }
 
@@ -519,6 +525,26 @@ class WTS_Core {
         } catch (error) {
             this.log(`Failed to list storage keys: ${error.message}`, 'error');
             return [];
+        }
+    }
+
+    /**
+     * Clear all WTS storage
+     * @returns {Promise<boolean>} Success status
+     */
+    async clearStorage() {
+        try {
+            const keys = await this.listKeys();
+            for (const key of keys) {
+                await this.deleteValue(key);
+            }
+            
+            this.log(`Cleared ${keys.length} storage entries`, 'info');
+            this.emit('storage:clear', { count: keys.length });
+            return true;
+        } catch (error) {
+            this.log(`Failed to clear storage: ${error.message}`, 'error');
+            return false;
         }
     }
 
