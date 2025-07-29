@@ -170,8 +170,8 @@ class WTS_Core {
                 console.log(fullMessage, context || '');
         }
 
-        // Emit log event for other modules to listen
-        this.emit('core:log', { message, level, timestamp, context });
+        // Emit log event for other modules to listen (but avoid recursion)
+        this._emitSilent('core:log', { message, level, timestamp, context });
     }
 
     /**
@@ -304,6 +304,41 @@ class WTS_Core {
             } catch (error) {
                 this.log(`Error in event listener for '${eventName}': ${error.message}`, 'error');
                 this.emit('core:listener-error', { eventName, error, listenerId: listener.id });
+            }
+        }
+
+        // Remove one-time listeners
+        listenersToRemove.forEach(id => this.off(eventName, id));
+
+        return true;
+    }
+
+    /**
+     * Emit an event silently (without logging debug messages to prevent recursion)
+     * @param {string} eventName - Name of the event
+     * @param {*} data - Data to pass to listeners
+     * @returns {boolean} Success status
+     * @private
+     */
+    _emitSilent(eventName, data = null) {
+        if (!this.eventListeners.has(eventName)) {
+            return false;
+        }
+
+        const listeners = this.eventListeners.get(eventName);
+        const listenersToRemove = [];
+
+        for (const listener of listeners) {
+            try {
+                listener.callback(data, eventName);
+                
+                if (listener.once) {
+                    listenersToRemove.push(listener.id);
+                }
+            } catch (error) {
+                // Use console.error directly to avoid recursion
+                console.error(`[WTS-Core] Error in event listener for '${eventName}': ${error.message}`);
+                this._emitSilent('core:listener-error', { eventName, error, listenerId: listener.id });
             }
         }
 

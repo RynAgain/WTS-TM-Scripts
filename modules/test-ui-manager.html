@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTS UI Manager Test Suite</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-header {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            color: #007bff;
+            margin-top: 0;
+        }
+        .test-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .test-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .test-button.primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .test-button.success {
+            background-color: #28a745;
+            color: white;
+        }
+        .test-button.warning {
+            background-color: #ffc107;
+            color: black;
+        }
+        .test-button.danger {
+            background-color: #dc3545;
+            color: white;
+        }
+        .test-button:hover {
+            opacity: 0.8;
+        }
+        .test-output {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-success { background-color: #28a745; }
+        .status-error { background-color: #dc3545; }
+        .status-warning { background-color: #ffc107; }
+        .status-info { background-color: #17a2b8; }
+        .mock-data {
+            background-color: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        .module-status {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="test-header">WTS UI Manager Test Suite</h1>
+        <p>Comprehensive testing for the WTS UI Manager module - Phase 6 of the modular architecture.</p>
+        
+        <!-- Module Status -->
+        <div class="test-section">
+            <h3>Module Status</h3>
+            <div id="moduleStatus">
+                <div class="module-status">
+                    <span class="status-indicator status-info"></span>
+                    <span>Checking module availability...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Initialization Tests -->
+        <div class="test-section">
+            <h3>Initialization Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testInitialization()">Test Initialization</button>
+                <button class="test-button warning" onclick="testShutdown()">Test Shutdown</button>
+                <button class="test-button success" onclick="testReinitialization()">Test Re-initialization</button>
+            </div>
+            <div id="initOutput" class="test-output"></div>
+        </div>
+
+        <!-- Panel Management Tests -->
+        <div class="test-section">
+            <h3>Panel Management Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testPanelCreation()">Create Panel</button>
+                <button class="test-button success" onclick="testPanelVisibility()">Toggle Visibility</button>
+                <button class="test-button warning" onclick="testPanelPosition()">Test Positioning</button>
+                <button class="test-button danger" onclick="testPanelDestroy()">Destroy Panel</button>
+            </div>
+            <div id="panelOutput" class="test-output"></div>
+        </div>
+
+        <!-- Button Functionality Tests -->
+        <div class="test-section">
+            <h3>Button Functionality Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testExportButton()">Test Export Button</button>
+                <button class="test-button primary" onclick="testRefreshButton()">Test Refresh Button</button>
+                <button class="test-button primary" onclick="testUploadButton()">Test Upload Button</button>
+                <button class="test-button primary" onclick="testCSRFButton()">Test CSRF Settings</button>
+            </div>
+            <div id="buttonOutput" class="test-output"></div>
+        </div>
+
+        <!-- Modal Dialog Tests -->
+        <div class="test-section">
+            <h3>Modal Dialog Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testCSRFModal()">Open CSRF Modal</button>
+                <button class="test-button warning" onclick="testModalInteraction()">Test Modal Interaction</button>
+                <button class="test-button danger" onclick="testModalClose()">Close All Modals</button>
+            </div>
+            <div id="modalOutput" class="test-output"></div>
+        </div>
+
+        <!-- Store Management Tests -->
+        <div class="test-section">
+            <h3>Store Management Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testStoreDropdown()">Test Store Dropdown</button>
+                <button class="test-button success" onclick="testStoreSwitch()">Test Store Switch</button>
+                <button class="test-button warning" onclick="loadMockStoreData()">Load Mock Store Data</button>
+            </div>
+            <div id="storeOutput" class="test-output"></div>
+        </div>
+
+        <!-- Real-time Updates Tests -->
+        <div class="test-section">
+            <h3>Real-time Updates Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testRealTimeUpdates()">Start Real-time Updates</button>
+                <button class="test-button warning" onclick="testCounterUpdates()">Test Counter Updates</button>
+                <button class="test-button danger" onclick="stopRealTimeUpdates()">Stop Updates</button>
+            </div>
+            <div id="updatesOutput" class="test-output"></div>
+        </div>
+
+        <!-- Event Integration Tests -->
+        <div class="test-section">
+            <h3>Event Integration Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testEventListeners()">Test Event Listeners</button>
+                <button class="test-button success" onclick="testEventEmission()">Test Event Emission</button>
+                <button class="test-button warning" onclick="testModuleEvents()">Test Module Events</button>
+            </div>
+            <div id="eventOutput" class="test-output"></div>
+        </div>
+
+        <!-- Configuration Tests -->
+        <div class="test-section">
+            <h3>Configuration Tests</h3>
+            <div class="test-controls">
+                <button class="test-button primary" onclick="testConfigLoad()">Test Config Load</button>
+                <button class="test-button success" onclick="testConfigUpdate()">Test Config Update</button>
+                <button class="test-button warning" onclick="testConfigPersistence()">Test Persistence</button>
+            </div>
+            <div id="configOutput" class="test-output"></div>
+        </div>
+
+        <!-- Mock Data Section -->
+        <div class="test-section">
+            <h3>Mock Data</h3>
+            <div class="mock-data">
+                <strong>Mock ASIN Data:</strong>
+                <pre id="mockAsinData">Loading mock data...</pre>
+            </div>
+            <div class="mock-data">
+                <strong>Mock Store Mappings:</strong>
+                <pre id="mockStoreData">Loading mock store data...</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Dependencies -->
+    <script src="wts-core.js"></script>
+    <script src="wts-ui-manager.js"></script>
+
+    <script>
+        // Test Suite Implementation
+        let core = null;
+        let uiManager = null;
+        let testResults = {};
+
+        // Mock Tampermonkey functions
+        window.GM_getValue = (key, defaultValue) => {
+            const stored = localStorage.getItem(`gm_${key}`);
+            return stored ? JSON.parse(stored) : defaultValue;
+        };
+
+        window.GM_setValue = (key, value) => {
+            localStorage.setItem(`gm_${key}`, JSON.stringify(value));
+        };
+
+        window.GM_deleteValue = (key) => {
+            localStorage.removeItem(`gm_${key}`);
+        };
+
+        // Initialize test environment
+        async function initializeTestEnvironment() {
+            try {
+                // Initialize core
+                core = new WTS_Core();
+                await core.initialize();
+                
+                // Create mock modules
+                createMockModules();
+                
+                // Initialize UI Manager
+                uiManager = new WTS_UIManager(core);
+                
+                updateModuleStatus('success', 'All modules loaded successfully');
+                loadMockData();
+                
+            } catch (error) {
+                updateModuleStatus('error', `Initialization failed: ${error.message}`);
+                console.error('Test environment initialization failed:', error);
+            }
+        }
+
+        // Create mock modules for testing
+        function createMockModules() {
+            // Mock Data Extractor
+            const mockDataExtractor = {
+                name: 'WTS_DataExtractor',
+                version: '1.0.0',
+                async extractData() {
+                    return {
+                        success: true,
+                        data: generateMockAsinData(),
+                        emptyCount: Math.floor(Math.random() * 5)
+                    };
+                },
+                async getDataCounts() {
+                    return {
+                        success: true,
+                        dataCount: Math.floor(Math.random() * 50) + 10,
+                        emptyCount: Math.floor(Math.random() * 5)
+                    };
+                }
+            };
+
+            // Mock Export Manager
+            const mockExportManager = {
+                name: 'WTS_ExportManager',
+                version: '1.0.0',
+                async exportData(data, format) {
+                    return {
+                        success: true,
+                        format: format,
+                        filename: `test_export_${Date.now()}.${format}`,
+                        recordCount: data.length
+                    };
+                }
+            };
+
+            // Mock Store Manager
+            const mockStoreManager = {
+                name: 'WTS_StoreManager',
+                version: '1.0.0',
+                async uploadStoreMappings(file) {
+                    return {
+                        success: true,
+                        count: Math.floor(Math.random() * 20) + 5
+                    };
+                },
+                async getMappingCount() {
+                    return Math.floor(Math.random() * 20) + 5;
+                },
+                async getAvailableStores() {
+                    return [
+                        { code: 'NYC', id: 10001 },
+                        { code: 'LAX', id: 10002 },
+                        { code: 'CHI', id: 10003 },
+                        { code: 'MIA', id: 10004 }
+                    ];
+                },
+                async switchStore(storeCode) {
+                    return {
+                        success: true,
+                        storeCode: storeCode
+                    };
+                }
+            };
+
+            // Mock CSRF Manager
+            const mockCSRFManager = {
+                name: 'WTS_CSRFManager',
+                version: '1.0.0',
+                async getSettings() {
+                    return {
+                        currentFallbackToken: 'mock_token_12345',
+                        useFallback: true,
+                        capturedToken: 'captured_token_67890',
+                        capturedTimestamp: Date.now() - 3600000 // 1 hour ago
+                    };
+                },
+                async updateSettings(settings) {
+                    return { success: true };
+                },
+                async clearCapturedToken() {
+                    return { success: true };
+                }
+            };
+
+            // Register mock modules with core
+            core.modules.set('WTS_DataExtractor', mockDataExtractor);
+            core.modules.set('WTS_ExportManager', mockExportManager);
+            core.modules.set('WTS_StoreManager', mockStoreManager);
+            core.modules.set('WTS_CSRFManager', mockCSRFManager);
+        }
+
+        // Generate mock ASIN data
+        function generateMockAsinData() {
+            const mockAsins = [];
+            const sampleNames = [
+                'Organic Bananas',
+                'Whole Milk',
+                'Free Range Eggs',
+                'Artisan Bread',
+                'Fresh Salmon',
+                'Greek Yogurt',
+                'Avocados',
+                'Quinoa',
+                'Almond Butter',
+                'Organic Spinach'
+            ];
+
+            for (let i = 0; i < Math.floor(Math.random() * 20) + 5; i++) {
+                mockAsins.push({
+                    ASIN: `B${String(Math.random()).substring(2, 12)}`,
+                    Name: sampleNames[Math.floor(Math.random() * sampleNames.length)],
+                    Section: `section_${Math.floor(Math.random() * 5) + 1}`
+                });
+            }
+
+            return mockAsins;
+        }
+
+        // Update module status display
+        function updateModuleStatus(type, message) {
+            const statusDiv = document.getElementById('moduleStatus');
+            const statusClass = `status-${type}`;
+            statusDiv.innerHTML = `
+                <div class="module-status">
+                    <span class="status-indicator ${statusClass}"></span>
+                    <span>${message}</span>
+                </div>
+            `;
+        }
+
+        // Load mock data displays
+        function loadMockData() {
+            const mockAsinData = generateMockAsinData();
+            document.getElementById('mockAsinData').textContent = JSON.stringify(mockAsinData, null, 2);
+            
+            const mockStoreData = [
+                { storeCode: 'NYC', storeId: 10001 },
+                { storeCode: 'LAX', storeId: 10002 },
+                { storeCode: 'CHI', storeId: 10003 },
+                { storeCode: 'MIA', storeId: 10004 }
+            ];
+            document.getElementById('mockStoreData').textContent = JSON.stringify(mockStoreData, null, 2);
+        }
+
+        // Test Functions
+        async function testInitialization() {
+            const output = document.getElementById('initOutput');
+            output.textContent = 'Testing UI Manager initialization...\n';
+            
+            try {
+                const result = await uiManager.initialize();
+                output.textContent += `✅ Initialization: ${result ? 'SUCCESS' : 'FAILED'}\n`;
+                output.textContent += `📊 Module Info: ${JSON.stringify(uiManager.getModuleInfo(), null, 2)}\n`;
+                testResults.initialization = result;
+            } catch (error) {
+                output.textContent += `❌ Initialization Error: ${error.message}\n`;
+                testResults.initialization = false;
+            }
+        }
+
+        async function testShutdown() {
+            const output = document.getElementById('initOutput');
+            output.textContent += '\nTesting UI Manager shutdown...\n';
+            
+            try {
+                const result = await uiManager.shutdown();
+                output.textContent += `✅ Shutdown: ${result ? 'SUCCESS' : 'FAILED'}\n`;
+                testResults.shutdown = result;
+            } catch (error) {
+                output.textContent += `❌ Shutdown Error: ${error.message}\n`;
+                testResults.shutdown = false;
+            }
+        }
+
+        async function testReinitialization() {
+            const output = document.getElementById('initOutput');
+            output.textContent += '\nTesting re-initialization...\n';
+            
+            try {
+                await uiManager.shutdown();
+                const result = await uiManager.initialize();
+                output.textContent += `✅ Re-initialization: ${result ? 'SUCCESS' : 'FAILED'}\n`;
+                testResults.reinitialization = result;
+            } catch (error) {
+                output.textContent += `❌ Re-initialization Error: ${error.message}\n`;
+                testResults.reinitialization = false;
+            }
+        }
+
+        async function testPanelCreation() {
+            const output = document.getElementById('panelOutput');
+            output.textContent = 'Testing panel creation...\n';
+            
+            try {
+                if (!uiManager.state.isInitialized) {
+                    await uiManager.initialize();
+                }
+                
+                const panelExists = document.querySelector('[style*="position: fixed"]') !== null;
+                output.textContent += `✅ Panel Created: ${panelExists ? 'SUCCESS' : 'FAILED'}\n`;
+                
+                if (panelExists) {
+                    const position = uiManager.getPanelPosition();
+                    output.textContent += `📍 Panel Position: ${JSON.stringify(position)}\n`;
+                }
+                
+                testResults.panelCreation = panelExists;
+            } catch (error) {
+                output.textContent += `❌ Panel Creation Error: ${error.message}\n`;
+                testResults.panelCreation = false;
+            }
+        }
+
+        function testPanelVisibility() {
+            const output = document.getElementById('panelOutput');
+            output.textContent += '\nTesting panel visibility...\n';
+            
+            try {
+                const initialState = uiManager.state.isPanelVisible;
+                const toggleResult = uiManager.togglePanel();
+                const newState = uiManager.state.isPanelVisible;
+                
+                output.textContent += `📊 Initial State: ${initialState}\n`;
+                output.textContent += `🔄 Toggle Result: ${toggleResult}\n`;
+                output.textContent += `📊 New State: ${newState}\n`;
+                output.textContent += `✅ Visibility Toggle: ${newState !== initialState ? 'SUCCESS' : 'FAILED'}\n`;
+                
+                testResults.panelVisibility = newState !== initialState;
+            } catch (error) {
+                output.textContent += `❌ Visibility Test Error: ${error.message}\n`;
+                testResults.panelVisibility = false;
+            }
+        }
+
+        async function testPanelPosition() {
+            const output = document.getElementById('panelOutput');
+            output.textContent += '\nTesting panel positioning...\n';
+            
+            try {
+                const newX = Math.floor(Math.random() * 200) + 50;
+                const newY = Math.floor(Math.random() * 200) + 50;
+                
+                const result = await uiManager.updatePanelPosition(newX, newY);
+                const currentPosition = uiManager.getPanelPosition();
+                
+                output.textContent += `🎯 Target Position: {x: ${newX}, y: ${newY}}\n`;
+                output.textContent += `📍 Current Position: ${JSON.stringify(currentPosition)}\n`;
+                output.textContent += `✅ Position Update: ${result ? 'SUCCESS' : 'FAILED'}\n`;
+                
+                testResults.panelPosition = result;
+            } catch (error) {
+                output.textContent += `❌ Position Test Error: ${error.message}\n`;
+                testResults.panelPosition = false;
+            }
+        }
+
+        function testPanelDestroy() {
+            const output = document.getElementById('panelOutput');
+            output.textContent += '\nTesting panel destruction...\n';
+            
+            try {
+                uiManager._removeUIElements();
+                const panelExists = document.querySelector('[style*="position: fixed"]') !== null;
+                
+                output.textContent += `✅ Panel Destroyed: ${!panelExists ? 'SUCCESS' : 'FAILED'}\n`;
+                testResults.panelDestroy = !panelExists;
+            } catch (error) {
+                output.textContent += `❌ Panel Destroy Error: ${error.message}\n`;
+                testResults.panelDestroy = false;
+            }
+        }
+
+        async function testExportButton() {
+            const output = document.getElementById('buttonOutput');
+            output.textContent = 'Testing export button functionality...\n';
+            
+            try {
+                if (!uiManager.state.isInitialized) {
+                    await uiManager.initialize();
+                }
+                
+                // Simulate export button click
+                await uiManager._handleExportClick();
+                output.textContent += '✅ Export Button: Clicked successfully\n';
+                output.textContent += '📊 Export process completed without errors\n';
+                
+                testResults.exportButton = true;
+            } catch (error) {
+                output.textContent += `❌ Export Button Error: ${error.message}\n`;
+                testResults.exportButton = false;
+            }
+        }
+
+        async function testRefreshButton() {
+            const output = document.getElementById('buttonOutput');
+            output.textContent += '\nTesting refresh button functionality...\n';
+            
+            try {
+                await uiManager._handleRefreshClick();
+                output.textContent += '✅ Refresh Button: Clicked successfully\n';
+                output.textContent += '🔄 Data refresh completed\n';
+                
+                testResults.refreshButton = true;
+            } catch (error) {
+                output.textContent += `❌ Refresh Button Error: ${error.message}\n`;
+                testResults.refreshButton = false;
+            }
+        }
+
+        function testUploadButton() {
+            const output = document.getElementById('buttonOutput');
+            output.textContent += '\nTesting upload button functionality...\n';
+            
+            try {
+                uiManager._handleUploadClick();
+                output.textContent += '✅ Upload Button: Clicked successfully\n';
+                output.textContent += '📁 File input triggered\n';
+                
+                testResults.uploadButton = true;
+            } catch (error) {
+                output.textContent += `❌ Upload Button Error: ${error.message}\n`;
+                testResults.uploadButton = false;
+            }
+        }
+
+        function testCSRFButton() {
+            const output = document.getElementById('buttonOutput');
+            output.textContent += '\nTesting CSRF settings button functionality...\n';
+            
+            try {
+                uiManager._handleCSRFSettingsClick();
+                output.textContent += '✅ CSRF Settings Button: Clicked successfully\n';
+                output.textContent += '⚙️ CSRF modal should open\n';
+                
+                testResults.csrfButton = true;
+            } catch (error) {
+                output.textContent += `❌ CSRF Button Error: ${error.message}\n`;
+                testResults.csrfButton = false;
+            }
+        }
+
+        async function testCSRFModal() {
+            const output = document.getElementById('modalOutput');
+            output.textContent = 'Testing CSRF modal dialog...\n';
+            
+            try {
+                await uiManager._showCSRFSettingsModal();
+                
+                const modalExists = document.querySelector('[style*="position: fixed"][style*="rgba(0,0,0,0.5)"]') !== null;
+                output.textContent += `✅ CSRF Modal: ${modalExists ? 'OPENED' : 'FAILED TO OPEN'}\n`;
+                
+                if (modalExists) {
+                    output.textContent += '🎛️ Modal controls available for interaction\n';
+                }
+                
+                testResults.csrfModal = modalExists;
+            } catch (error) {
+                output.textContent += `❌ CSRF Modal Error: ${error.message}\n`;
+                testResults.csrfModal = false;
+            }
+        }
+
+        function testModalInteraction() {
+            const output = document.getElementById('modalOutput');
+            output.textContent += '\nTesting modal interaction...\n';
+            
+            try {
+                const modal = document.querySelector('[style*="position: fixed"][style*="rgba(0,0,0,0.5)"]');
+                if (modal) {
+                    const buttons = modal.querySelectorAll('button');
+                    output.textContent += `🎛️ Found ${buttons.length} interactive buttons in modal\n`;
+                    
+                    buttons.forEach((button, index) => {
+                        output.textContent += `  Button ${index + 1}: ${button.textContent}\n`;
+                    });
+                    
+                    testResults.modalInteraction = true;
+                } else {
+                    output.textContent += '❌ No modal found for interaction testing\n';
+                    testResults.modalInteraction = false;
+                }
+            } catch (error) {
+                output.textContent += `❌ Modal Interaction Error: ${error.message}\n`;
+                testResults.modalInteraction = false;
+            }
+        }
+
+        function testModalClose() {
+            const output = document.getElementById('modalOutput');
+            output.textContent += '\nTesting modal close functionality...\n';
+            
+            try {
+                const modals = document.querySelectorAll('[style*="position: fixed"][style*="rgba(0,0,0,0.5)"]');
+                modals.forEach(modal => {
+                    uiManager._closeModal(modal);
+                });
+                
+                const remainingModals = document.querySelectorAll('[style*="position: fixed"][style*="rgba(0,0,0,0.5)"]');
+                output.textContent += `✅ Modals Closed: ${remainingModals.length === 0 ? 'SUCCESS' : 'FAILED'}\n`;
+                output.textContent += `📊 Remaining modals: ${remainingModals.length}\n`;
+                
+                testResults.modalClose = remainingModals.length === 0;
+            } catch (error) {
+                output.textContent += `❌ Modal Close Error: ${error.message}\n`;
+                testResults.modalClose = false;
+            }
+        }
+
+        async function testStoreDropdown() {
+            const output = document.getElementById('storeOutput');
+            output.textContent = 'Testing store dropdown functionality...\n';
+            
+            try {
+                await uiManager._updateStoreControls();
+                
+                const dropdown = uiManager.elements.storeDropdown;
+                if (dropdown) {
+                    const optionCount = dropdown.options.length;
+                    output.textContent += `✅ Store Dropdown: ${optionCount > 1 ? 'SUCCESS' : 'FAILED'}\n`;
+                    output.textContent += `📊 Available options: ${optionCount}\n`;
+                    
+                    for (let i = 0; i < dropdown.options.length; i++) {
+                        const option = dropdown.options[i];
+                        output.textContent += `  ${i + 1}. ${option.textContent} (value: ${option.value})\n`;
+                    }
+                    
+                    testResults.storeDropdown = optionCount > 1;
+                } else {
+                    output.textContent += '❌ Store dropdown not found\n';
+                    testResults.storeDropdown = false;
+                }
+            } catch (error) {
+                output.textContent += `❌ Store Dropdown Error: ${error.message}\n`;
+                testResults.storeDropdown = false;
+            }
+        }
+
+        async function testStoreSwitch() {
+            const output = document.getElementById('storeOutput');
+            output.textContent += '\nTesting store switch functionality...\n';
+            
+            try {
+                // Set a test store in dropdown
+                if (uiManager.elements.storeDropdown) {
+                    uiManager.elements.storeDropdown.value = 'NYC';
+                    await uiManager._handleStoreSwitch();
+                    
+                    output.textContent += '✅ Store Switch: Executed successfully\n';
+                    output.textContent += '🏪 Switched to store: NYC\n';
+                    
+                    testResults.storeSwitch = true;
+                } else {
+                    output.textContent += '❌ Store dropdown not available for switch test\n';
+                    testResults.storeSwitch = false;
+                }
+            } catch (error) {
+                output.textContent += `❌ Store Switch Error: ${error.message}\n`;
+                testResults.storeSwitch = false;
+            }
+        }
+
+        function loadMockStoreData() {
+            const output = document.getElementById('storeOutput');
+            output.textContent += '\nLoading mock store data...\n';
+            
+            try {
+                // Simulate store mappings update
+                core.emit('store:mappings-updated', { count: 4 });
+                
+                output.textContent += '✅ Mock Store Data: Loaded successfully\n';
+                output.textContent += '📊 4 store mappings simulated\n';
+                
+                testResults.mockStoreData = true;
+            } catch (error) {
+                output.textContent += `❌ Mock Store Data Error: ${error.message}\n`;
+                testResults.mockStoreData = false;
+            }
+        }
+
+        function testRealTimeUpdates() {
+            const output = document.getElementById('updatesOutput');
+            output.textContent = 'Testing real-time updates...\n';
+            
+            try {
+                uiManager._startRealTimeUpdates();
+                
+                output.textContent += '✅ Real-time Updates: Started successfully\n';
+                output.textContent += `🔄 Update interval: ${uiManager.config.updateInterval}ms\n`;
+                output.textContent += '📊 Counter updates should begin shortly\n';
+                
+                testResults.realTimeUpdates = true;
+            } catch (error) {
+                output.textContent += `❌ Real-time Updates Error: ${error.message}\n`;
+                testResults.realTimeUpdates = false;
+            }
+        }
+
+        function testCounterUpdates() {
+            const output = document.getElementById('updatesOutput');
+            output.textContent += '\nTesting counter updates...\n';
+            
+            try {
+                const testDataCount = Math.floor(Math.random() * 50) + 10;
+                const testEmptyCount = Math.floor(Math.random() * 5);
+                
+                uiManager._updateCounterDisplay(testDataCount, testEmptyCount);
+                
+                output.textContent += `✅ Counter Update: SUCCESS\n`;
+                output.textContent += `📊 Test Data: ${testDataCount} ASINs, ${testEmptyCount} empty cards\n`;
+                
+                testResults.counterUpdates = true;
+            } catch (error) {
+                output.textContent += `❌ Counter Update Error: ${error.message}\n`;
+                testResults.counterUpdates = false;
+            }
+        }
+
+        function stopRealTimeUpdates() {
+            const output = document.getElementById('updatesOutput');
+            output.textContent += '\nStopping real-time updates...\n';
+            
+            try {
+                uiManager._stopRealTimeUpdates();
+                
+                output.textContent += '✅ Real-time Updates: Stopped successfully\n';
+                output.textContent += '⏹️ Update interval cleared\n';
+                
+                testResults.stopUpdates = true;
+            } catch (error) {
+                output.textContent += `❌ Stop Updates Error: ${error.message}\n`;
+                testResults.stopUpdates = false;
+            }
+        }
+
+        function testEventListeners() {
+            const output = document.getElementById('eventOutput');
+            output.textContent = 'Testing event listeners...\n';
+            
+            try {
+                // Test event emission and listening
+                let eventReceived = false;
+                
+                const testHandler = (data) => {
+                    eventReceived = true;
+                    output.textContent += `📨 Event received: ${JSON.stringify(data)}\n`;
+                };
+                
+                core.on('test:ui-event', testHandler);
+                core.emit('test:ui-event', { test: 'data', timestamp: Date.now() });
+                
+                setTimeout(() => {
+                    output.textContent += `✅ Event Listeners: ${eventReceived ? 'SUCCESS' : 'FAILED'}\n`;
+                    testResults.eventListeners = eventReceived;
+                    core.off('test:ui-event', testHandler);
+                }, 100);
+                
+            } catch (error) {
+                output.textContent += `❌ Event Listeners Error: ${error.message}\n`;
+                testResults.eventListeners = false;
+            }
+        }
+
+        function testEventEmission() {
+            const output = document.getElementById('eventOutput');
+            output.textContent += '\nTesting event emission...\n';
+            
+            try {
+                // Test UI Manager event emission
+                let eventsEmitted = 0;
+                
+                const eventTypes = ['ui:panel-created', 'ui:button-clicked', 'ui:modal-opened'];
+                
+                eventTypes.forEach(eventType => {
+                    core.on(eventType, () => {
+                        eventsEmitted++;
+                        output.textContent += `📤 Emitted: ${eventType}\n`;
+                    });
+                });
+                
+                // Trigger events
+                core.emit('ui:panel-created', { test: true });
+                core.emit('ui:button-clicked', { button: 'test' });
+                core.emit('ui:modal-opened', { modal: 'test' });
+                
+                setTimeout(() => {
+                    output.textContent += `✅ Event Emission: ${eventsEmitted === 3 ? 'SUCCESS' : 'FAILED'}\n`;
+                    output.textContent += `📊 Events emitted: ${eventsEmitted}/3\n`;
+                    testResults.eventEmission = eventsEmitted === 3;
+                }, 100);
+                
+            } catch (error) {
+                output.textContent += `❌ Event Emission Error: ${error.message}\n`;
+                testResults.eventEmission = false;
+            }
+        }
+
+        function testModuleEvents() {
+            const output = document.getElementById('eventOutput');
+            output.textContent += '\nTesting module integration events...\n';
+            
+            try {
+                // Simulate events from other modules
+                const moduleEvents = [
+                    { event: 'data:updated', data: { dataCount: 25, emptyCount: 3 } },
+                    { event: 'export:completed', data: { filename: 'test.csv', records: 25 } },
+                    { event: 'store:mappings-updated', data: { count: 5 } },
+                    { event: 'csrf:token-captured', data: { token: 'test_token' } }
+                ];
+                
+                moduleEvents.forEach(({ event, data }) => {
+                    core.emit(event, data);
+                    output.textContent += `📡 Simulated: ${event}\n`;
+                });
+                
+                output.textContent += '✅ Module Events: Simulated successfully\n';
+                output.textContent += '🔗 UI Manager should respond to these events\n';
+                
+                testResults.moduleEvents = true;
+            } catch (error) {
+                output.textContent += `❌ Module Events Error: ${error.message}\n`;
+                testResults.moduleEvents = false;
+            }
+        }
+
+        async function testConfigLoad() {
+            const output = document.getElementById('configOutput');
+            output.textContent = 'Testing configuration loading...\n';
+            
+            try {
+                await uiManager._loadConfiguration();
+                
+                output.textContent += '✅ Config Load: SUCCESS\n';
+                output.textContent += `📋 Current Config: ${JSON.stringify(uiManager.config, null, 2)}\n`;
+                
+                testResults.configLoad = true;
+            } catch (error) {
+                output.textContent += `❌ Config Load Error: ${error.message}\n`;
+                testResults.configLoad = false;
+            }
+        }
+
+        async function testConfigUpdate() {
+            const output = document.getElementById('configOutput');
+            output.textContent += '\nTesting configuration update...\n';
+            
+            try {
+                const newConfig = {
+                    updateInterval: 3000,
+                    enableRealTimeUpdates: false,
+                    testSetting: 'test_value'
+                };
+                
+                const result = await uiManager.updateConfiguration(newConfig);
+                
+                output.textContent += `✅ Config Update: ${result ? 'SUCCESS' : 'FAILED'}\n`;
+                output.textContent += `📝 Updated Config: ${JSON.stringify(uiManager.config, null, 2)}\n`;
+                
+                testResults.configUpdate = result;
+            } catch (error) {
+                output.textContent += `❌ Config Update Error: ${error.message}\n`;
+                testResults.configUpdate = false;
+            }
+        }
+
+        async function testConfigPersistence() {
+            const output = document.getElementById('configOutput');
+            output.textContent += '\nTesting configuration persistence...\n';
+            
+            try {
+                // Save test config
+                const testConfig = { persistenceTest: Date.now() };
+                await core.storage.set('wts_ui_config', testConfig);
+                
+                // Load config
+                const loadedConfig = await core.storage.get('wts_ui_config', {});
+                
+                const isPersistent = loadedConfig.persistenceTest === testConfig.persistenceTest;
+                
+                output.textContent += `✅ Config Persistence: ${isPersistent ? 'SUCCESS' : 'FAILED'}\n`;
+                output.textContent += `💾 Saved: ${JSON.stringify(testConfig)}\n`;
+                output.textContent += `📂 Loaded: ${JSON.stringify(loadedConfig)}\n`;
+                
+                testResults.configPersistence = isPersistent;
+            } catch (error) {
+                output.textContent += `❌ Config Persistence Error: ${error.message}\n`;
+                testResults.configPersistence = false;
+            }
+        }
+
+        // Run comprehensive test suite
+        async function runAllTests() {
+            console.log('🚀 Starting comprehensive UI Manager test suite...');
+            
+            try {
+                await testInitialization();
+                await testPanelCreation();
+                testPanelVisibility();
+                await testPanelPosition();
+                
+                await testExportButton();
+                await testRefreshButton();
+                testUploadButton();
+                testCSRFButton();
+                
+                await testCSRFModal();
+                testModalInteraction();
+                
+                await testStoreDropdown();
+                await testStoreSwitch();
+                loadMockStoreData();
+                
+                testRealTimeUpdates();
+                testCounterUpdates();
+                
+                testEventListeners();
+                testEventEmission();
+                testModuleEvents();
+                
+                await testConfigLoad();
+                await testConfigUpdate();
+                await testConfigPersistence();
+                
+                // Generate test report
+                setTimeout(() => {
+                    generateTestReport();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Test suite error:', error);
+            }
+        }
+
+        function generateTestReport() {
+            const totalTests = Object.keys(testResults).length;
+            const passedTests = Object.values(testResults).filter(result => result === true).length;
+            const failedTests = totalTests - passedTests;
+            
+            console.log('\n📊 UI Manager Test Report');
+            console.log('========================');
+            console.log(`Total Tests: ${totalTests}`);
+            console.log(`Passed: ${passedTests}`);
+            console.log(`Failed: ${failedTests}`);
+            console.log(`Success Rate: ${((passedTests / totalTests) * 100).toFixed(1)}%`);
+            console.log('\nDetailed Results:');
+            
+            Object.entries(testResults).forEach(([test, result]) => {
+                const status = result ? '✅' : '❌';
+                console.log(`${status} ${test}: ${result ? 'PASSED' : 'FAILED'}`);
+            });
+            
+            // Update page with summary
+            const summaryDiv = document.createElement('div');
+            summaryDiv.className = 'test-section';
+            summaryDiv.innerHTML = `
+                <h3>Test Summary</h3>
+                <div style="background: ${passedTests === totalTests ? '#d4edda' : '#f8d7da'};
+                           border: 1px solid ${passedTests === totalTests ? '#c3e6cb' : '#f5c6cb'};
+                           border-radius: 4px; padding: 15px; margin: 10px 0;">
+                    <strong>Results:</strong> ${passedTests}/${totalTests} tests passed (${((passedTests / totalTests) * 100).toFixed(1)}%)
+                    <br><strong>Status:</strong> ${passedTests === totalTests ? '✅ All tests passed!' : '⚠️ Some tests failed'}
+                </div>
+            `;
+            
+            document.querySelector('.test-container').appendChild(summaryDiv);
+        }
+
+        // Initialize test environment when page loads
+        window.addEventListener('load', () => {
+            initializeTestEnvironment();
+            
+            // Add run all tests button
+            const runAllButton = document.createElement('button');
+            runAllButton.textContent = '🚀 Run All Tests';
+            runAllButton.className = 'test-button success';
+            runAllButton.style.fontSize = '16px';
+            runAllButton.style.padding = '12px 24px';
+            runAllButton.style.marginBottom = '20px';
+            runAllButton.onclick = runAllTests;
+            
+            const header = document.querySelector('.test-header');
+            header.parentNode.insertBefore(runAllButton, header.nextSibling);
+        });
+    </script>
+</body>
+</html>

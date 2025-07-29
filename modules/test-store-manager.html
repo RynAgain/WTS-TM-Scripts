@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTS Store Manager Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1, h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .file-input {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px dashed #007bff;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .mapping-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .log-output {
+            background-color: #000;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 10px 0;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .input-group label {
+            min-width: 100px;
+            font-weight: bold;
+        }
+        .input-group input {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏪 WTS Store Manager Test Suite</h1>
+        <p>This page tests the WTS Store Manager module functionality including store mapping management, CSV parsing, and store switching capabilities.</p>
+        
+        <div class="stats" id="moduleStats">
+            <div class="stat-card">
+                <div class="stat-value" id="mappingCount">0</div>
+                <div class="stat-label">Store Mappings</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="moduleStatus">Not Loaded</div>
+                <div class="stat-label">Module Status</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="csrfStatus">Unknown</div>
+                <div class="stat-label">CSRF Manager</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="testsPassed">0</div>
+                <div class="stat-label">Tests Passed</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔧 Module Initialization</h2>
+        <div class="controls">
+            <button onclick="initializeModules()">Initialize Modules</button>
+            <button onclick="testModuleInfo()">Get Module Info</button>
+            <button onclick="clearLogs()">Clear Logs</button>
+        </div>
+        <div id="initResults" class="test-result info">Click "Initialize Modules" to start testing</div>
+    </div>
+
+    <div class="container">
+        <h2>📊 Store Mapping Management</h2>
+        <div class="test-section">
+            <h3>Current Store Mappings</h3>
+            <div class="controls">
+                <button onclick="loadMappings()">Load Mappings</button>
+                <button onclick="displayMappings()">Display Mappings</button>
+                <button onclick="clearAllMappings()">Clear All Mappings</button>
+            </div>
+            <div id="mappingDisplay" class="mapping-display">No mappings loaded</div>
+        </div>
+
+        <div class="test-section">
+            <h3>Add Individual Mapping</h3>
+            <div class="input-group">
+                <label>Store Code:</label>
+                <input type="text" id="storeCode" placeholder="ABC" maxlength="3">
+                <label>Store ID:</label>
+                <input type="number" id="storeId" placeholder="12345">
+                <button onclick="addStoreMapping()">Add Mapping</button>
+            </div>
+            <div id="addMappingResult"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>📄 CSV File Processing</h2>
+        <div class="test-section">
+            <h3>Upload CSV File</h3>
+            <div class="file-input">
+                <input type="file" id="csvFile" accept=".csv" onchange="handleFileSelect(event)">
+                <p>Select a CSV file with StoreCode and StoreId columns</p>
+            </div>
+            <div class="controls">
+                <button onclick="testSampleCSV()">Test Sample CSV</button>
+                <button onclick="testInvalidCSV()">Test Invalid CSV</button>
+            </div>
+            <div id="csvResults"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🔄 Store Switching</h2>
+        <div class="test-section">
+            <h3>Switch Store</h3>
+            <div class="input-group">
+                <label>Store Code:</label>
+                <input type="text" id="switchStoreCode" placeholder="ABC" maxlength="3">
+                <button onclick="switchToStore()">Switch Store</button>
+                <button onclick="testCSRFToken()">Test CSRF Token</button>
+            </div>
+            <div id="switchResults"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>🧪 Automated Tests</h2>
+        <div class="controls">
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="runValidationTests()">Test Validation</button>
+            <button onclick="runCSVTests()">Test CSV Parsing</button>
+            <button onclick="runEventTests()">Test Events</button>
+        </div>
+        <div id="testResults"></div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Event Log</h2>
+        <div class="controls">
+            <button onclick="toggleEventLogging()">Toggle Event Logging</button>
+            <button onclick="clearEventLog()">Clear Event Log</button>
+        </div>
+        <div id="eventLog" class="log-output">Event logging will appear here...</div>
+    </div>
+
+    <!-- Include required modules -->
+    <script src="wts-core.js"></script>
+    <script src="wts-csrf-manager.js"></script>
+    <script src="wts-store-manager.js"></script>
+
+    <script>
+        // Global variables
+        let core = null;
+        let csrfManager = null;
+        let storeManager = null;
+        let eventLoggingEnabled = true;
+        let testsPassed = 0;
+        let totalTests = 0;
+
+        // Mock GM functions for testing
+        if (typeof GM_getValue === 'undefined') {
+            window.GM_getValue = function(key, defaultValue) {
+                return localStorage.getItem('GM_' + key) || defaultValue;
+            };
+            window.GM_setValue = function(key, value) {
+                localStorage.setItem('GM_' + key, value);
+            };
+            window.GM_deleteValue = function(key) {
+                localStorage.removeItem('GM_' + key);
+            };
+        }
+
+        // Initialize modules
+        async function initializeModules() {
+            try {
+                updateResult('initResults', 'Initializing WTS modules...', 'info');
+                
+                // Initialize Core
+                core = new WTS_Core();
+                await core.initialize();
+                
+                // Initialize CSRF Manager
+                csrfManager = new WTS_CSRFManager(core);
+                await csrfManager.initialize();
+                
+                // Initialize Store Manager
+                storeManager = new WTS_StoreManager(core, csrfManager);
+                await storeManager.initialize();
+                
+                // Set up event logging
+                setupEventLogging();
+                
+                // Update UI
+                updateStats();
+                updateResult('initResults', '✅ All modules initialized successfully!', 'success');
+                
+                // Register modules with core
+                core.registerModule('StoreManager', storeManager);
+                core.registerModule('CSRFManager', csrfManager);
+                
+            } catch (error) {
+                updateResult('initResults', `❌ Initialization failed: ${error.message}`, 'error');
+                console.error('Initialization error:', error);
+            }
+        }
+
+        // Set up event logging
+        function setupEventLogging() {
+            if (!core) return;
+            
+            const events = [
+                'store:manager-initialized',
+                'store:mappings-loaded',
+                'store:mappings-saved',
+                'store:mapping-updated',
+                'store:mappings-cleared',
+                'store:switch-started',
+                'store:switch-completed',
+                'store:switch-failed',
+                'store:file-upload-started',
+                'store:file-upload-completed',
+                'store:file-upload-failed',
+                'csrf:token-found',
+                'csrf:token-not-found'
+            ];
+            
+            events.forEach(eventName => {
+                core.on(eventName, (data) => {
+                    if (eventLoggingEnabled) {
+                        logEvent(eventName, data);
+                    }
+                });
+            });
+        }
+
+        // Log event to display
+        function logEvent(eventName, data) {
+            const eventLog = document.getElementById('eventLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${eventName}: ${JSON.stringify(data, null, 2)}\n`;
+            eventLog.textContent += logEntry;
+            eventLog.scrollTop = eventLog.scrollHeight;
+        }
+
+        // Update statistics display
+        function updateStats() {
+            if (!storeManager) return;
+            
+            const info = storeManager.getModuleInfo();
+            document.getElementById('mappingCount').textContent = info.mappingCount;
+            document.getElementById('moduleStatus').textContent = 'Initialized';
+            document.getElementById('csrfStatus').textContent = info.hasCSRFManager ? 'Available' : 'Missing';
+            document.getElementById('testsPassed').textContent = `${testsPassed}/${totalTests}`;
+        }
+
+        // Update result display
+        function updateResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `test-result ${type}`;
+        }
+
+        // Test module info
+        function testModuleInfo() {
+            if (!storeManager) {
+                updateResult('initResults', '❌ Store Manager not initialized', 'error');
+                return;
+            }
+            
+            const info = storeManager.getModuleInfo();
+            const infoText = `Module: ${info.name} v${info.version}\nMappings: ${info.mappingCount}\nCSRF Manager: ${info.hasCSRFManager ? 'Available' : 'Missing'}\nAPI Endpoint: ${info.apiEndpoint}`;
+            updateResult('initResults', infoText, 'info');
+        }
+
+        // Load and display mappings
+        async function loadMappings() {
+            if (!storeManager) return;
+            
+            try {
+                await storeManager.loadStoredMappings();
+                displayMappings();
+                updateStats();
+            } catch (error) {
+                updateResult('mappingDisplay', `Error loading mappings: ${error.message}`, 'error');
+            }
+        }
+
+        // Display current mappings
+        function displayMappings() {
+            if (!storeManager) return;
+            
+            const mappings = storeManager.getStoreMappings();
+            const display = document.getElementById('mappingDisplay');
+            
+            if (mappings.size === 0) {
+                display.innerHTML = '<em>No store mappings available</em>';
+                return;
+            }
+            
+            let html = '<table style="width: 100%; border-collapse: collapse;">';
+            html += '<tr style="background-color: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px;">Store Code</th><th style="border: 1px solid #ddd; padding: 8px;">Store ID</th></tr>';
+            
+            for (const [storeCode, storeId] of mappings) {
+                html += `<tr><td style="border: 1px solid #ddd; padding: 8px;">${storeCode}</td><td style="border: 1px solid #ddd; padding: 8px;">${storeId}</td></tr>`;
+            }
+            
+            html += '</table>';
+            display.innerHTML = html;
+        }
+
+        // Add individual store mapping
+        async function addStoreMapping() {
+            if (!storeManager) return;
+            
+            const storeCode = document.getElementById('storeCode').value.trim().toUpperCase();
+            const storeId = parseInt(document.getElementById('storeId').value);
+            
+            if (!storeCode || !storeId) {
+                updateResult('addMappingResult', '❌ Please enter both store code and store ID', 'error');
+                return;
+            }
+            
+            try {
+                const success = await storeManager.setStoreMapping(storeCode, storeId);
+                if (success) {
+                    updateResult('addMappingResult', `✅ Added mapping: ${storeCode} -> ${storeId}`, 'success');
+                    displayMappings();
+                    updateStats();
+                    
+                    // Clear inputs
+                    document.getElementById('storeCode').value = '';
+                    document.getElementById('storeId').value = '';
+                } else {
+                    updateResult('addMappingResult', '❌ Failed to add mapping', 'error');
+                }
+            } catch (error) {
+                updateResult('addMappingResult', `❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Clear all mappings
+        async function clearAllMappings() {
+            if (!storeManager) return;
+            
+            if (confirm('Are you sure you want to clear all store mappings?')) {
+                try {
+                    await storeManager.clearAllMappings();
+                    displayMappings();
+                    updateStats();
+                    updateResult('addMappingResult', '✅ All mappings cleared', 'success');
+                } catch (error) {
+                    updateResult('addMappingResult', `❌ Error clearing mappings: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        // Handle file selection
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                processCSVFile(file);
+            }
+        }
+
+        // Process CSV file
+        async function processCSVFile(file) {
+            if (!storeManager) return;
+            
+            try {
+                updateResult('csvResults', `Processing file: ${file.name}...`, 'info');
+                
+                const success = await storeManager.handleFileUpload(file);
+                if (success) {
+                    updateResult('csvResults', `✅ Successfully processed ${file.name}`, 'success');
+                    displayMappings();
+                    updateStats();
+                } else {
+                    updateResult('csvResults', `❌ Failed to process ${file.name}`, 'error');
+                }
+            } catch (error) {
+                updateResult('csvResults', `❌ Error processing file: ${error.message}`, 'error');
+            }
+        }
+
+        // Test sample CSV
+        function testSampleCSV() {
+            if (!storeManager) return;
+            
+            const sampleCSV = `StoreCode,StoreId,StoreName
+ABC,12345,Sample Store A
+DEF,67890,Sample Store B
+GHI,11111,Sample Store C`;
+            
+            try {
+                const mappings = storeManager.parseCSV(sampleCSV);
+                updateResult('csvResults', `✅ Sample CSV parsed successfully. Found ${mappings.size} mappings.`, 'success');
+            } catch (error) {
+                updateResult('csvResults', `❌ Sample CSV parsing failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Test invalid CSV
+        function testInvalidCSV() {
+            if (!storeManager) return;
+            
+            const invalidCSV = `WrongColumn,AnotherColumn
+ABC,12345
+DEF,invalid_id`;
+            
+            try {
+                const mappings = storeManager.parseCSV(invalidCSV);
+                updateResult('csvResults', `❌ Invalid CSV should have failed but didn't`, 'error');
+            } catch (error) {
+                updateResult('csvResults', `✅ Invalid CSV correctly rejected: ${error.message}`, 'success');
+            }
+        }
+
+        // Switch to store
+        async function switchToStore() {
+            if (!storeManager) return;
+            
+            const storeCode = document.getElementById('switchStoreCode').value.trim().toUpperCase();
+            if (!storeCode) {
+                updateResult('switchResults', '❌ Please enter a store code', 'error');
+                return;
+            }
+            
+            try {
+                updateResult('switchResults', `Attempting to switch to store ${storeCode}...`, 'info');
+                
+                // Check if store code exists
+                if (!storeManager.hasStoreCode(storeCode)) {
+                    updateResult('switchResults', `❌ Store code ${storeCode} not found in mappings`, 'error');
+                    return;
+                }
+                
+                const success = await storeManager.switchToStore(storeCode);
+                if (success) {
+                    updateResult('switchResults', `✅ Store switch initiated for ${storeCode}`, 'success');
+                } else {
+                    updateResult('switchResults', `❌ Store switch failed for ${storeCode}`, 'error');
+                }
+            } catch (error) {
+                updateResult('switchResults', `❌ Error switching store: ${error.message}`, 'error');
+            }
+        }
+
+        // Test CSRF token
+        async function testCSRFToken() {
+            if (!csrfManager) return;
+            
+            try {
+                updateResult('switchResults', 'Testing CSRF token retrieval...', 'info');
+                const token = await csrfManager.getToken();
+                
+                if (token) {
+                    updateResult('switchResults', `✅ CSRF token retrieved: ${token.substring(0, 20)}...`, 'success');
+                } else {
+                    updateResult('switchResults', '❌ No CSRF token available', 'error');
+                }
+            } catch (error) {
+                updateResult('switchResults', `❌ CSRF token error: ${error.message}`, 'error');
+            }
+        }
+
+        // Run all automated tests
+        async function runAllTests() {
+            testsPassed = 0;
+            totalTests = 0;
+            
+            updateResult('testResults', 'Running automated tests...', 'info');
+            
+            await runValidationTests();
+            await runCSVTests();
+            await runEventTests();
+            
+            const passRate = totalTests > 0 ? Math.round((testsPassed / totalTests) * 100) : 0;
+            updateResult('testResults', `✅ Tests completed: ${testsPassed}/${totalTests} passed (${passRate}%)`, 
+                        passRate === 100 ? 'success' : 'error');
+            updateStats();
+        }
+
+        // Run validation tests
+        async function runValidationTests() {
+            if (!storeManager) return;
+            
+            const tests = [
+                // Valid store code tests
+                { test: () => storeManager._validateStoreCode('ABC'), expected: true, name: 'Valid 3-char store code' },
+                { test: () => storeManager._validateStoreCode('AB'), expected: false, name: 'Invalid 2-char store code' },
+                { test: () => storeManager._validateStoreCode('ABCD'), expected: false, name: 'Invalid 4-char store code' },
+                { test: () => storeManager._validateStoreCode(''), expected: false, name: 'Empty store code' },
+                
+                // Valid store ID tests
+                { test: () => storeManager._validateStoreId('12345'), expected: true, name: 'Valid numeric store ID' },
+                { test: () => storeManager._validateStoreId(12345), expected: true, name: 'Valid integer store ID' },
+                { test: () => storeManager._validateStoreId('abc'), expected: false, name: 'Invalid non-numeric store ID' },
+                { test: () => storeManager._validateStoreId('12.34'), expected: false, name: 'Invalid decimal store ID' },
+                { test: () => storeManager._validateStoreId('0'), expected: false, name: 'Invalid zero store ID' },
+            ];
+            
+            for (const { test, expected, name } of tests) {
+                totalTests++;
+                try {
+                    const result = test();
+                    if (result === expected) {
+                        testsPassed++;
+                        console.log(`✅ ${name}: PASSED`);
+                    } else {
+                        console.log(`❌ ${name}: FAILED (expected ${expected}, got ${result})`);
+                    }
+                } catch (error) {
+                    console.log(`❌ ${name}: ERROR - ${error.message}`);
+                }
+            }
+        }
+
+        // Run CSV parsing tests
+        async function runCSVTests() {
+            if (!storeManager) return;
+            
+            const validCSV = `StoreCode,StoreId
+ABC,12345
+DEF,67890`;
+            
+            const invalidCSV = `WrongColumn,AnotherColumn
+ABC,12345`;
+            
+            const tests = [
+                {
+                    name: 'Valid CSV parsing',
+                    test: () => {
+                        const mappings = storeManager.parseCSV(validCSV);
+                        return mappings.size === 2 && mappings.get('ABC') === 12345;
+                    },
+                    expected: true
+                },
+                {
+                    name: 'Invalid CSV rejection',
+                    test: () => {
+                        try {
+                            storeManager.parseCSV(invalidCSV);
+                            return false; // Should have thrown an error
+                        } catch (error) {
+                            return true; // Correctly threw an error
+                        }
+                    },
+                    expected: true
+                }
+            ];
+            
+            for (const { test, expected, name } of tests) {
+                totalTests++;
+                try {
+                    const result = test();
+                    if (result === expected) {
+                        testsPassed++;
+                        console.log(`✅ ${name}: PASSED`);
+                    } else {
+                        console.log(`❌ ${name}: FAILED`);
+                    }
+                } catch (error) {
+                    console.log(`❌ ${name}: ERROR - ${error.message}`);
+                }
+            }
+        }
+
+        // Run event tests
+        async function runEventTests() {
+            if (!core || !storeManager) return;
+            
+            let eventReceived = false;
+            
+            // Test event emission
+            const listenerId = core.on('store:mapping-updated', () => {
+                eventReceived = true;
+            });
+            
+            totalTests++;
+            try {
+                await storeManager.setStoreMapping('TST', 99999);
+                
+                // Give event time to fire
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                if (eventReceived) {
+                    testsPassed++;
+                    console.log('✅ Event emission test: PASSED');
+                } else {
+                    console.log('❌ Event emission test: FAILED');
+                }
+                
+                // Clean up
+                core.off('store:mapping-updated', listenerId);
+            } catch (error) {
+                console.log(`❌ Event emission test: ERROR - ${error.message}`);
+            }
+        }
+
+        // Toggle event logging
+        function toggleEventLogging() {
+            eventLoggingEnabled = !eventLoggingEnabled;
+            const button = event.target;
+            button.textContent = eventLoggingEnabled ? 'Disable Event Logging' : 'Enable Event Logging';
+            
+            if (eventLoggingEnabled) {
+                logEvent('system', 'Event logging enabled');
+            }
+        }
+
+        // Clear event log
+        function clearEventLog() {
+            document.getElementById('eventLog').textContent = '';
+        }
+
+        // Clear all logs
+        function clearLogs() {
+            clearEventLog();
+            document.getElementById('initResults').textContent = '';
+            document.getElementById('csvResults').textContent = '';
+            document.getElementById('switchResults').textContent = '';
+            document.getElementById('testResults').textContent = '';
+            document.getElementById('addMappingResult').textContent = '';
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('WTS Store Manager Test Page Loaded');
+            
+            // Add some sample data for testing
+            if (typeof localStorage !== 'undefined') {
+                const sampleMappings = {
+                    'ABC': 12345,
+                    'DEF': 67890,
+                    'GHI': 11111
+                };
+                localStorage.setItem('GM_wts_storeMappingData', JSON.stringify(sampleMappings));
+            }
+        });
+    </script>
+</body>
+</html>

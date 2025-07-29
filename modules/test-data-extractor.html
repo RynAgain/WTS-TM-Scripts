@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTS Data Extractor Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .button.success {
+            background: #28a745;
+        }
+        .button.danger {
+            background: #dc3545;
+        }
+        .log-output {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .mock-asin-card {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 4px;
+            background: white;
+        }
+        .a-truncate-full {
+            font-weight: bold;
+            color: #333;
+        }
+        .mock-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+        }
+        .a-carousel-card-empty {
+            border: 1px dashed #999;
+            padding: 20px;
+            margin: 5px;
+            text-align: center;
+            color: #666;
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WTS Data Extractor Module Test</h1>
+        <p>This page tests the WTS_DataExtractor module functionality with mock Whole Foods DOM elements.</p>
+        
+        <div class="test-section">
+            <h3>Module Status</h3>
+            <div id="module-status" class="status info">Loading...</div>
+            <button class="button" onclick="checkModuleStatus()">Check Status</button>
+            <button class="button" onclick="getStatistics()">Get Statistics</button>
+            <button class="button" onclick="resetStatistics()">Reset Statistics</button>
+        </div>
+
+        <div class="test-section">
+            <h3>Data Extraction Tests</h3>
+            <button class="button" onclick="testSingleExtraction()">Test Single Extraction</button>
+            <button class="button success" onclick="startMonitoring()">Start Monitoring</button>
+            <button class="button danger" onclick="stopMonitoring()">Stop Monitoring</button>
+            <button class="button" onclick="updateConfiguration()">Update Config</button>
+            <div id="extraction-results" class="log-output"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Event System Tests</h3>
+            <button class="button" onclick="testEvents()">Test Event Communication</button>
+            <button class="button" onclick="clearEventLog()">Clear Event Log</button>
+            <div id="event-log" class="log-output"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Mock Whole Foods Data</h3>
+            <button class="button" onclick="addMockData()">Add Mock ASIN Cards</button>
+            <button class="button" onclick="removeMockData()">Remove Mock Data</button>
+            <button class="button" onclick="addEmptyCards()">Add Empty Cards</button>
+            <div id="mock-data-container"></div>
+        </div>
+    </div>
+
+    <!-- Mock Whole Foods DOM Structure -->
+    <div id="mock-wf-content" style="display: none;">
+        <!-- This will be populated with mock data -->
+    </div>
+
+    <!-- Load WTS Core and Data Extractor -->
+    <script src="wts-core.js"></script>
+    <script src="wts-data-extractor.js"></script>
+
+    <script>
+        // Test framework
+        let core;
+        let dataExtractor;
+        let eventLog = [];
+
+        // Initialize test environment
+        async function initializeTest() {
+            try {
+                // Initialize WTS Core
+                core = new WTS_Core();
+                await core.initialize();
+                
+                // Create and register Data Extractor
+                dataExtractor = new WTS_DataExtractor(core);
+                
+                const registered = core.registerModule('WTS_DataExtractor', {
+                    version: dataExtractor.version,
+                    initialize: () => dataExtractor.initialize(),
+                    cleanup: () => dataExtractor.cleanup(),
+                    dependencies: dataExtractor.dependencies,
+                    instance: dataExtractor
+                });
+
+                if (registered) {
+                    const initialized = await core.initializeModule('WTS_DataExtractor');
+                    if (initialized) {
+                        updateStatus('WTS Data Extractor initialized successfully', 'success');
+                        setupEventListeners();
+                    } else {
+                        updateStatus('Failed to initialize WTS Data Extractor', 'error');
+                    }
+                } else {
+                    updateStatus('Failed to register WTS Data Extractor', 'error');
+                }
+            } catch (error) {
+                updateStatus(`Initialization error: ${error.message}`, 'error');
+                console.error('Initialization error:', error);
+            }
+        }
+
+        // Setup event listeners for testing
+        function setupEventListeners() {
+            // Listen to all data extractor events
+            const events = [
+                'data:updated',
+                'data:extraction-started',
+                'data:extraction-completed',
+                'data:extraction-failed',
+                'data:monitoring-started',
+                'data:monitoring-stopped',
+                'data:changes-detected',
+                'data:config-updated',
+                'data:statistics-reset'
+            ];
+
+            events.forEach(eventName => {
+                core.on(eventName, (data) => {
+                    logEvent(eventName, data);
+                });
+            });
+        }
+
+        // Utility functions
+        function updateStatus(message, type = 'info') {
+            const statusEl = document.getElementById('module-status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+
+        function logEvent(eventName, data) {
+            const timestamp = new Date().toISOString();
+            const logEntry = {
+                timestamp,
+                event: eventName,
+                data: data
+            };
+            eventLog.push(logEntry);
+            
+            const eventLogEl = document.getElementById('event-log');
+            eventLogEl.textContent += `[${timestamp}] ${eventName}: ${JSON.stringify(data, null, 2)}\n`;
+            eventLogEl.scrollTop = eventLogEl.scrollHeight;
+        }
+
+        function logExtraction(message) {
+            const timestamp = new Date().toISOString();
+            const extractionEl = document.getElementById('extraction-results');
+            extractionEl.textContent += `[${timestamp}] ${message}\n`;
+            extractionEl.scrollTop = extractionEl.scrollHeight;
+        }
+
+        // Test functions
+        async function checkModuleStatus() {
+            try {
+                const status = dataExtractor.getStatus();
+                logExtraction(`Module Status: ${JSON.stringify(status, null, 2)}`);
+                updateStatus(`Module active - Monitoring: ${status.monitoring}`, 'success');
+            } catch (error) {
+                logExtraction(`Error getting status: ${error.message}`);
+                updateStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function getStatistics() {
+            try {
+                const stats = dataExtractor.getStatistics();
+                logExtraction(`Statistics: ${JSON.stringify(stats, null, 2)}`);
+            } catch (error) {
+                logExtraction(`Error getting statistics: ${error.message}`);
+            }
+        }
+
+        async function resetStatistics() {
+            try {
+                dataExtractor.resetStatistics();
+                logExtraction('Statistics reset successfully');
+            } catch (error) {
+                logExtraction(`Error resetting statistics: ${error.message}`);
+            }
+        }
+
+        async function testSingleExtraction() {
+            try {
+                logExtraction('Starting single extraction test...');
+                const result = await dataExtractor.extractData();
+                logExtraction(`Extraction completed: ${result.data.length} items found`);
+                logExtraction(`Result: ${JSON.stringify(result, null, 2)}`);
+            } catch (error) {
+                logExtraction(`Extraction error: ${error.message}`);
+            }
+        }
+
+        async function startMonitoring() {
+            try {
+                const success = await dataExtractor.startRealTimeMonitoring();
+                if (success) {
+                    logExtraction('Real-time monitoring started');
+                    updateStatus('Monitoring active', 'success');
+                } else {
+                    logExtraction('Failed to start monitoring');
+                }
+            } catch (error) {
+                logExtraction(`Monitoring start error: ${error.message}`);
+            }
+        }
+
+        function stopMonitoring() {
+            try {
+                const success = dataExtractor.stopRealTimeMonitoring();
+                if (success) {
+                    logExtraction('Real-time monitoring stopped');
+                    updateStatus('Monitoring stopped', 'info');
+                } else {
+                    logExtraction('Failed to stop monitoring');
+                }
+            } catch (error) {
+                logExtraction(`Monitoring stop error: ${error.message}`);
+            }
+        }
+
+        async function updateConfiguration() {
+            try {
+                const newConfig = {
+                    monitoringInterval: 2000,
+                    maxRetries: 5
+                };
+                const success = await dataExtractor.updateConfiguration(newConfig);
+                if (success) {
+                    logExtraction(`Configuration updated: ${JSON.stringify(newConfig)}`);
+                } else {
+                    logExtraction('Failed to update configuration');
+                }
+            } catch (error) {
+                logExtraction(`Configuration update error: ${error.message}`);
+            }
+        }
+
+        function testEvents() {
+            logExtraction('Testing event system...');
+            
+            // Emit test events
+            core.emit('data:extract-once');
+            
+            setTimeout(() => {
+                core.emit('data:start-monitoring');
+            }, 1000);
+            
+            setTimeout(() => {
+                core.emit('data:stop-monitoring');
+            }, 3000);
+        }
+
+        function clearEventLog() {
+            eventLog = [];
+            document.getElementById('event-log').textContent = '';
+        }
+
+        // Mock data functions
+        function addMockData() {
+            const container = document.getElementById('mock-data-container');
+            const mockSection = document.createElement('div');
+            mockSection.setAttribute('data-cel-widget', 'fresh-produce-section');
+            mockSection.className = 'mock-section';
+            mockSection.innerHTML = `
+                <h4>Mock Fresh Produce Section</h4>
+                <div data-csa-c-type="item" data-csa-c-item-type="asin" data-csa-c-item-id="B001MOCK001" class="mock-asin-card">
+                    <div class="a-truncate-full">Organic Bananas - 2 lbs</div>
+                </div>
+                <div data-csa-c-type="item" data-csa-c-item-type="asin" data-csa-c-item-id="B001MOCK002" class="mock-asin-card">
+                    <div class="a-truncate-cut">Fresh Strawberries - 1 lb container</div>
+                </div>
+                <div data-csa-c-type="item" data-csa-c-item-type="asin" data-csa-c-item-id="B001MOCK003" class="mock-asin-card">
+                    <div class="a-truncate-full">Avocados - Pack of 4</div>
+                </div>
+            `;
+            container.appendChild(mockSection);
+            logExtraction('Mock ASIN cards added');
+        }
+
+        function addEmptyCards() {
+            const container = document.getElementById('mock-data-container');
+            const emptySection = document.createElement('div');
+            emptySection.innerHTML = `
+                <h4>Mock Empty Cards</h4>
+                <li class="a-carousel-card a-carousel-card-empty">Empty Card 1</li>
+                <li class="a-carousel-card a-carousel-card-empty">Empty Card 2</li>
+            `;
+            container.appendChild(emptySection);
+            logExtraction('Empty cards added');
+        }
+
+        function removeMockData() {
+            const container = document.getElementById('mock-data-container');
+            container.innerHTML = '';
+            logExtraction('Mock data removed');
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', initializeTest);
+    </script>
+</body>
+</html>

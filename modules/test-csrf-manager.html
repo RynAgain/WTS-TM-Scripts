@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WTS CSRF Manager Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin: 5px 0;
+        }
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; }
+        .status.warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .log-output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .token-display {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .config-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .config-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .config-item label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .config-item input, .config-item select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .stat-item {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        /* Add a test CSRF token in meta tag for testing */
+        meta[name="anti-csrftoken-a2z"] {
+            content: "test-token-12345-abcdef-67890-ghijkl-mnopqr-stuvwx-yz1234-567890";
+        }
+    </style>
+    <!-- Add test CSRF token in meta tag -->
+    <meta name="anti-csrftoken-a2z" content="test-token-12345-abcdef-67890-ghijkl-mnopqr-stuvwx-yz1234-567890">
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 WTS CSRF Manager Test Suite</h1>
+        <p>This page tests the WTS_CSRFManager module integration with WTS_Core.</p>
+        
+        <div id="initialization-status" class="status info">
+            Initializing modules...
+        </div>
+    </div>
+
+    <!-- Core System Status -->
+    <div class="container">
+        <h2>🏗️ Core System Status</h2>
+        <div class="test-section">
+            <h3>WTS Core</h3>
+            <div id="core-status" class="status">Checking...</div>
+            <div id="core-info"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>CSRF Manager Module</h3>
+            <div id="csrf-status" class="status">Checking...</div>
+            <div id="csrf-info"></div>
+        </div>
+    </div>
+
+    <!-- Token Extraction Tests -->
+    <div class="container">
+        <h2>🎯 Token Extraction Tests</h2>
+        
+        <div class="test-section">
+            <h3>Network Interception</h3>
+            <div id="network-status" class="status">Checking...</div>
+            <button onclick="testNetworkInterception()">Test Network Interception</button>
+            <button onclick="simulateXHRRequest()">Simulate XHR Request</button>
+            <button onclick="simulateFetchRequest()">Simulate Fetch Request</button>
+        </div>
+
+        <div class="test-section">
+            <h3>DOM Token Extraction</h3>
+            <div id="extraction-status" class="status">Ready</div>
+            <button onclick="testTokenExtraction()">Extract Token from DOM</button>
+            <button onclick="testTokenExtractionWithRetry()">Extract with Retry Logic</button>
+            <div id="extracted-token" class="token-display" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Captured Token Management</h3>
+            <div id="captured-status" class="status">Ready</div>
+            <button onclick="getCapturedToken()">Get Captured Token</button>
+            <button onclick="refreshCapturedToken()">Refresh Captured Token</button>
+            <div id="captured-token" class="token-display" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Fallback Token System</h3>
+            <div id="fallback-status" class="status">Ready</div>
+            <button onclick="getFallbackToken()">Get Fallback Token</button>
+            <button onclick="setCustomFallbackToken()">Set Custom Fallback</button>
+            <div id="fallback-token" class="token-display" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- Configuration Management -->
+    <div class="container">
+        <h2>⚙️ Configuration Management</h2>
+        
+        <div class="test-section">
+            <h3>Current Configuration</h3>
+            <button onclick="loadConfiguration()">Load Configuration</button>
+            <button onclick="saveConfiguration()">Save Configuration</button>
+            
+            <div class="config-section">
+                <div class="config-item">
+                    <label>Token Expiration (hours):</label>
+                    <input type="number" id="tokenExpiration" value="24" min="1" max="168">
+                </div>
+                <div class="config-item">
+                    <label>Max Retries:</label>
+                    <input type="number" id="maxRetries" value="3" min="1" max="10">
+                </div>
+                <div class="config-item">
+                    <label>Retry Delay (ms):</label>
+                    <input type="number" id="retryDelay" value="1000" min="100" max="10000">
+                </div>
+                <div class="config-item">
+                    <label>Use Fallback:</label>
+                    <select id="useFallback">
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                    </select>
+                </div>
+                <div class="config-item">
+                    <label>Header Name:</label>
+                    <input type="text" id="headerName" value="anti-csrftoken-a2z">
+                </div>
+                <div class="config-item">
+                    <label>Min Token Length:</label>
+                    <input type="number" id="minTokenLength" value="50" min="10" max="200">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics and Monitoring -->
+    <div class="container">
+        <h2>📊 Statistics and Monitoring</h2>
+        
+        <div class="test-section">
+            <h3>Module Statistics</h3>
+            <button onclick="loadStatistics()">Refresh Statistics</button>
+            
+            <div class="stats-grid" id="stats-grid">
+                <!-- Statistics will be populated here -->
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>Event Monitoring</h3>
+            <button onclick="startEventMonitoring()">Start Event Monitoring</button>
+            <button onclick="stopEventMonitoring()">Stop Event Monitoring</button>
+            <button onclick="clearEventLog()">Clear Event Log</button>
+            
+            <div id="event-log" class="log-output">
+                Event monitoring not started...
+            </div>
+        </div>
+    </div>
+
+    <!-- Comprehensive Test Suite -->
+    <div class="container">
+        <h2>🧪 Comprehensive Test Suite</h2>
+        
+        <div class="test-section">
+            <h3>Automated Tests</h3>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="runBasicTests()">Run Basic Tests</button>
+            <button onclick="runAdvancedTests()">Run Advanced Tests</button>
+            
+            <div id="test-results" class="log-output">
+                No tests run yet...
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Scripts -->
+    <script src="wts-core.js"></script>
+    <script src="wts-csrf-manager.js"></script>
+    
+    <script>
+        // Global variables
+        let core = null;
+        let csrfManager = null;
+        let eventMonitoring = false;
+        let eventListeners = [];
+
+        // Initialize the test environment
+        async function initializeTestEnvironment() {
+            try {
+                updateStatus('initialization-status', 'Initializing WTS Core...', 'info');
+                
+                // Initialize WTS Core
+                if (typeof WTS_Core === 'undefined') {
+                    throw new Error('WTS_Core not loaded');
+                }
+                
+                core = new WTS_Core();
+                await core.initialize();
+                
+                updateStatus('core-status', 'WTS Core initialized successfully', 'success');
+                document.getElementById('core-info').innerHTML = `
+                    <strong>Version:</strong> ${core.version}<br>
+                    <strong>Modules:</strong> ${core.modules.size}<br>
+                    <strong>Event Listeners:</strong> ${core.events.listenerCount}
+                `;
+                
+                // Initialize CSRF Manager
+                updateStatus('initialization-status', 'Initializing CSRF Manager...', 'info');
+                
+                if (typeof createCSRFManager === 'undefined') {
+                    throw new Error('WTS_CSRFManager not loaded');
+                }
+                
+                csrfManager = createCSRFManager(core);
+                const initResult = await core.initializeModule('WTS_CSRFManager');
+                
+                if (initResult) {
+                    updateStatus('csrf-status', 'CSRF Manager initialized successfully', 'success');
+                    updateStatus('initialization-status', 'All modules initialized successfully!', 'success');
+                    
+                    const module = core.getModule('WTS_CSRFManager');
+                    document.getElementById('csrf-info').innerHTML = `
+                        <strong>Version:</strong> ${module.version}<br>
+                        <strong>Status:</strong> ${module.status}<br>
+                        <strong>Network Interception:</strong> ${csrfManager.networkInterceptionActive ? 'Active' : 'Inactive'}
+                    `;
+                    
+                    // Update network status
+                    updateStatus('network-status', 
+                        csrfManager.networkInterceptionActive ? 'Network interception is active' : 'Network interception is inactive',
+                        csrfManager.networkInterceptionActive ? 'success' : 'warning'
+                    );
+                    
+                } else {
+                    throw new Error('Failed to initialize CSRF Manager');
+                }
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                updateStatus('initialization-status', `Initialization failed: ${error.message}`, 'error');
+                updateStatus('core-status', 'Failed to initialize', 'error');
+                updateStatus('csrf-status', 'Failed to initialize', 'error');
+            }
+        }
+
+        // Utility function to update status displays
+        function updateStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = `status ${type}`;
+            }
+        }
+
+        // Test network interception
+        function testNetworkInterception() {
+            if (!csrfManager) {
+                updateStatus('network-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            const isActive = csrfManager.networkInterceptionActive;
+            updateStatus('network-status', 
+                `Network interception is ${isActive ? 'active' : 'inactive'}. Original functions ${isActive ? 'intercepted' : 'not intercepted'}.`,
+                isActive ? 'success' : 'warning'
+            );
+        }
+
+        // Simulate XHR request with CSRF token
+        function simulateXHRRequest() {
+            if (!csrfManager) {
+                updateStatus('network-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/test-endpoint');
+            xhr.setRequestHeader('anti-csrftoken-a2z', 'simulated-xhr-token-12345-abcdef-67890-ghijkl-mnopqr-stuvwx');
+            
+            updateStatus('network-status', 'Simulated XHR request with CSRF token', 'info');
+            
+            // Check if token was captured after a short delay
+            setTimeout(async () => {
+                const capturedToken = await csrfManager.getCapturedToken();
+                if (capturedToken && capturedToken.includes('simulated-xhr-token')) {
+                    updateStatus('network-status', 'XHR token successfully captured!', 'success');
+                } else {
+                    updateStatus('network-status', 'XHR token not captured', 'warning');
+                }
+            }, 100);
+        }
+
+        // Simulate fetch request with CSRF token
+        function simulateFetchRequest() {
+            if (!csrfManager) {
+                updateStatus('network-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            const headers = new Headers();
+            headers.set('anti-csrftoken-a2z', 'simulated-fetch-token-12345-abcdef-67890-ghijkl-mnopqr-stuvwx');
+            
+            // This will trigger the intercepted fetch
+            fetch('/test-endpoint', {
+                method: 'POST',
+                headers: headers
+            }).catch(() => {}); // Ignore network errors
+            
+            updateStatus('network-status', 'Simulated fetch request with CSRF token', 'info');
+            
+            // Check if token was captured after a short delay
+            setTimeout(async () => {
+                const capturedToken = await csrfManager.getCapturedToken();
+                if (capturedToken && capturedToken.includes('simulated-fetch-token')) {
+                    updateStatus('network-status', 'Fetch token successfully captured!', 'success');
+                } else {
+                    updateStatus('network-status', 'Fetch token not captured', 'warning');
+                }
+            }, 100);
+        }
+
+        // Test token extraction from DOM
+        function testTokenExtraction() {
+            if (!csrfManager) {
+                updateStatus('extraction-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            updateStatus('extraction-status', 'Extracting token from DOM...', 'info');
+            
+            const token = csrfManager.extractCSRFToken();
+            
+            if (token) {
+                updateStatus('extraction-status', 'Token extracted successfully!', 'success');
+                document.getElementById('extracted-token').style.display = 'block';
+                document.getElementById('extracted-token').innerHTML = `
+                    <strong>Extracted Token:</strong><br>
+                    ${token}<br>
+                    <small>Length: ${token.length} characters</small>
+                `;
+            } else {
+                updateStatus('extraction-status', 'No token found in DOM', 'warning');
+                document.getElementById('extracted-token').style.display = 'none';
+            }
+        }
+
+        // Test token extraction with retry logic
+        async function testTokenExtractionWithRetry() {
+            if (!csrfManager) {
+                updateStatus('extraction-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            updateStatus('extraction-status', 'Extracting token with retry logic...', 'info');
+            
+            const token = await csrfManager.extractTokenWithRetry();
+            
+            if (token) {
+                updateStatus('extraction-status', 'Token extracted with retry logic!', 'success');
+                document.getElementById('extracted-token').style.display = 'block';
+                document.getElementById('extracted-token').innerHTML = `
+                    <strong>Extracted Token (with retry):</strong><br>
+                    ${token}<br>
+                    <small>Length: ${token.length} characters</small>
+                `;
+            } else {
+                updateStatus('extraction-status', 'No token found even with retry logic', 'error');
+                document.getElementById('extracted-token').style.display = 'none';
+            }
+        }
+
+        // Get captured token
+        async function getCapturedToken() {
+            if (!csrfManager) {
+                updateStatus('captured-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            updateStatus('captured-status', 'Retrieving captured token...', 'info');
+            
+            const token = await csrfManager.getCapturedToken();
+            
+            if (token) {
+                updateStatus('captured-status', 'Captured token retrieved!', 'success');
+                document.getElementById('captured-token').style.display = 'block';
+                document.getElementById('captured-token').innerHTML = `
+                    <strong>Captured Token:</strong><br>
+                    ${token}<br>
+                    <small>Length: ${token.length} characters</small>
+                `;
+            } else {
+                updateStatus('captured-status', 'No captured token available', 'warning');
+                document.getElementById('captured-token').style.display = 'none';
+            }
+        }
+
+        // Refresh captured token
+        async function refreshCapturedToken() {
+            if (!csrfManager) {
+                updateStatus('captured-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            updateStatus('captured-status', 'Refreshing captured token...', 'info');
+            
+            const result = await csrfManager.refreshCapturedToken();
+            
+            if (result) {
+                updateStatus('captured-status', 'Captured token cache cleared!', 'success');
+                document.getElementById('captured-token').style.display = 'none';
+            } else {
+                updateStatus('captured-status', 'Failed to refresh captured token', 'error');
+            }
+        }
+
+        // Get fallback token
+        async function getFallbackToken() {
+            if (!csrfManager) {
+                updateStatus('fallback-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            updateStatus('fallback-status', 'Retrieving fallback token...', 'info');
+            
+            const token = await csrfManager.getFallbackToken();
+            
+            if (token) {
+                updateStatus('fallback-status', 'Fallback token retrieved!', 'success');
+                document.getElementById('fallback-token').style.display = 'block';
+                document.getElementById('fallback-token').innerHTML = `
+                    <strong>Fallback Token:</strong><br>
+                    ${token}<br>
+                    <small>Length: ${token.length} characters</small>
+                `;
+            } else {
+                updateStatus('fallback-status', 'No fallback token available', 'error');
+                document.getElementById('fallback-token').style.display = 'none';
+            }
+        }
+
+        // Set custom fallback token
+        async function setCustomFallbackToken() {
+            if (!csrfManager) {
+                updateStatus('fallback-status', 'CSRF Manager not initialized', 'error');
+                return;
+            }
+            
+            const customToken = prompt('Enter custom fallback token:', 'custom-fallback-token-12345-abcdef-67890-ghijkl-mnopqr-stuvwx-yz1234');
+            
+            if (customToken) {
+                updateStatus('fallback-status', 'Setting custom fallback token...', 'info');
+                
+                const result = await csrfManager.setFallbackToken(customToken);
+                
+                if (result) {
+                    updateStatus('fallback-status', 'Custom fallback token set!', 'success');
+                } else {
+                    updateStatus('fallback-status', 'Failed to set custom fallback token', 'error');
+                }
+            }
+        }
+
+        // Load configuration
+        function loadConfiguration() {
+            if (!csrfManager) {
+                alert('CSRF Manager not initialized');
+                return;
+            }
+            
+            const config = csrfManager.getConfiguration();
+            
+            document.getElementById('tokenExpiration').value = config.tokenExpirationHours;
+            document.getElementById('maxRetries').value = config.maxRetries;
+            document.getElementById('retryDelay').value = config.retryDelayMs;
+            document.getElementById('useFallback').value = config.useFallback.toString();
+            document.getElementById('headerName').value = config.headerName;
+            document.getElementById('minTokenLength').value = config.minTokenLength;
+            
+            alert('Configuration loaded from CSRF Manager');
+        }
+
+        // Save configuration
+        async function saveConfiguration() {
+            if (!csrfManager) {
+                alert('CSRF Manager not initialized');
+                return;
+            }
+            
+            const newConfig = {
+                tokenExpirationHours: parseInt(document.getElementById('tokenExpiration').value),
+                maxRetries: parseInt(document.getElementById('maxRetries').value),
+                retryDelayMs: parseInt(document.getElementById('retryDelay').value),
+                useFallback: document.getElementById('useFallback').value === 'true',
+                headerName: document.getElementById('headerName').value,
+                minTokenLength: parseInt(document.getElementById('minTokenLength').value)
+            };
+            
+            const result = await csrfManager.updateConfiguration(newConfig);
+            
+            if (result) {
+                alert('Configuration saved successfully!');
+            } else {
+                alert('Failed to save configuration');
+            }
+        }
+
+        // Load statistics
+        async function loadStatistics() {
+            if (!csrfManager) {
+                alert('CSRF Manager not initialized');
+                return;
+            }
+            
+            const stats = await csrfManager.getStatistics();
+            const coreInfo = core.getSystemInfo();
+            
+            const statsGrid = document.getElementById('stats-grid');
+            statsGrid.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${csrfManager.networkInterceptionActive ? 'Active' : 'Inactive'}</div>
+                    <div class="stat-label">Network Interception</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.tokenAge ? stats.tokenAge.toFixed(1) + 'h' : 'N/A'}</div>
+                    <div class="stat-label">Token Age</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.lastCapturedToken ? 'Yes' : 'No'}</div>
+                    <div class="stat-label">Has Captured Token</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${coreInfo.moduleCount}</div>
+                    <div class="stat-label">Registered Modules</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${coreInfo.eventListenerCount}</div>
+                    <div class="stat-label">Event Listeners</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.configuration?.tokenExpirationHours || 'N/A'}h</div>
+                    <div class="stat-label">Token Expiration</div>
+                </div>
+            `;
+        }
+
+        // Event monitoring functions
+        function startEventMonitoring() {
+            if (!core) {
+                alert('Core not initialized');
+                return;
+            }
+            
+            if (eventMonitoring) {
+                alert('Event monitoring already active');
+                return;
+            }
+            
+            eventMonitoring = true;
+            const eventLog = document.getElementById('event-log');
+            eventLog.textContent = 'Event monitoring started...\n';
+            
+            // Listen to all CSRF-related events
+            const csrfEvents = [
+                'csrf:manager-initialized',
+                'csrf:manager-failed',
+                'csrf:manager-cleanup',
+                'csrf:config-updated',
+                'csrf:interception-started',
+                'csrf:interception-stopped',
+                'csrf:token-captured',
+                'csrf:token-expired',
+                'csrf:extraction-failed',
+                'csrf:token-found',
+                'csrf:token-not-found',
+                'csrf:token-refreshed',
+                'csrf:fallback-used',
+                'csrf:fallback-updated'
+            ];
+            
+            csrfEvents.forEach(eventName => {
+                const listenerId = core.on(eventName, (data) => {
+                    const timestamp = new Date().toISOString();
+                    eventLog.textContent += `[${timestamp}] ${eventName}: ${JSON.stringify(data, null, 2)}\n`;
+                    eventLog.scrollTop = eventLog.scrollHeight;
+                });
+                eventListeners.push({ eventName, listenerId });
+            });
+            
+            alert('Event monitoring started for all CSRF events');
+        }
+
+        function stopEventMonitoring() {
+            if (!core || !eventMonitoring) {
+                alert('Event monitoring not active');
+                return;
+            }
+            
+            // Remove all event listeners
+            eventListeners.forEach(({ eventName, listenerId }) => {
+                core.off(eventName, listenerId);
+            });
+            eventListeners = [];
+            eventMonitoring = false;
+            
+            const eventLog = document.getElementById('event-log');
+            eventLog.textContent += '\nEvent monitoring stopped.\n';
+            
+            alert('Event monitoring stopped');
+        }
+
+        function clearEventLog() {
+            document.getElementById('event-log').textContent = eventMonitoring ? 'Event monitoring active...\n' : 'Event monitoring not started...\n';
+        }
+
+        // Test suite functions
+        async function runAllTests() {
+            const results = document.getElementById('test-results');
+            results.textContent = 'Running comprehensive test suite...\n\n';
+            
+            await runBasicTests();
+            await runAdvancedTests();
+            
+            results.textContent += '\n=== ALL TESTS COMPLETED ===\n';
+        }
+
+        async function runBasicTests() {
+            const results = document.getElementById('test-results');
+            results.textContent += '=== BASIC TESTS ===\n';
+            
+            // Test 1: Module initialization
+            results.textContent += 'Test 1: Module Initialization... ';
+            if (core && csrfManager) {
+                results.textContent += 'PASS\n';
+            } else {
+                results.textContent += 'FAIL\n';
+            }
+            
+            // Test 2: Network interception
+            results.textContent += 'Test 2: Network Interception... ';
+            if (csrfManager.networkInterceptionActive) {
+                results.textContent += 'PASS\n';
+            } else {
+                results.textContent += 'FAIL\n';
+            }
+            
+            // Test 3: Configuration management
+            results.textContent += 'Test 3: Configuration Management... ';
+            try {
+                const config = csrfManager.getConfiguration();
+                if (config && typeof config === 'object') {
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL\n';
+            }
+            
+            // Test 4: Token extraction
+            results.textContent += 'Test 4: Token Extraction... ';
+            try {
+                const token = csrfManager.extractCSRFToken();
+                if (token) {
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL (no token found)\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL (error)\n';
+            }
+            
+            // Test 5: Fallback token
+            results.textContent += 'Test 5: Fallback Token... ';
+            try {
+                const fallbackToken = await csrfManager.getFallbackToken();
+                if (fallbackToken) {
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL\n';
+            }
+            
+            results.textContent += '\n';
+        }
+
+        async function runAdvancedTests() {
+            const results = document.getElementById('test-results');
+            results.textContent += '=== ADVANCED TESTS ===\n';
+            
+            // Test 1: Token extraction with retry
+            results.textContent += 'Test 1: Token Extraction with Retry... ';
+            try {
+                const token = await csrfManager.extractTokenWithRetry(2, 500);
+                if (token) {
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL (no token)\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL (error)\n';
+            }
+            
+            // Test 2: Statistics retrieval
+            results.textContent += 'Test 2: Statistics Retrieval... ';
+            try {
+                const stats = await csrfManager.getStatistics();
+                if (stats && typeof stats === 'object') {
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL\n';
+            }
+            
+            // Test 3: Configuration update
+            results.textContent += 'Test 3: Configuration Update... ';
+            try {
+                const originalConfig = csrfManager.getConfiguration();
+                const testConfig = { maxRetries: 5 };
+                const updateResult = await csrfManager.updateConfiguration(testConfig);
+                
+                if (updateResult) {
+                    // Restore original config
+                    await csrfManager.updateConfiguration(originalConfig);
+                    results.textContent += 'PASS\n';
+                } else {
+                    results.textContent += 'FAIL\n';
+                }
+            } catch (error) {
+                results.textContent += 'FAIL\n';
+            }
+            
+            // Test 4: Event emission
+            results.textContent += 'Test 4: Event Emission... ';
+            try {
+                let eventReceived = false;
+                const listenerId = core.on('csrf:test-event', () => {
+                    eventReceived = true;
+                });
+                
+                core.emit('csrf:test-event', { test: true });
+                
+                setTimeout(() => {
+                    core.off('csrf:test-event', listenerId);
+                    if (eventReceived) {
+                        results.textContent += 'PASS\n';
+                    } else {
+                        results.textContent += 'FAIL\n';
+                    }
+                }, 100);
+            } catch (error) {
+                results.textContent += 'FAIL\n';
+            }
+            
+            results.textContent += '\n';
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initializeTestEnvironment);
+    </script>
+</body>
+</html>

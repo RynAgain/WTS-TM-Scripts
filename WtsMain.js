@@ -1,14 +1,20 @@
 // ==UserScript==
-// @name         Whole Foods ASIN Exporter with Store Mapping
+// @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      1.2.001
-// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality
+// @version      2.0.0
+// @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
 // @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-core.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-csrf-manager.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-data-extractor.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-export-manager.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-store-manager.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-ui-manager.js
 // @match        *://*.wholefoodsmarket.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
