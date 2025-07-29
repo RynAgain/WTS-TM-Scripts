@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.001
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -73,36 +73,72 @@
     /**
      * Check if all required modules are available
      */
-    function checkModuleAvailability() {
+    /**
+     * Check if all required modules are available with robust validation
+     * Waits for actual module objects, not just their existence
+     */
+    async function checkModuleAvailability(maxWaitTime = 10000) {
         const requiredModules = [
-            'WTS_Core',
-            'WTS_CSRFManager', 
-            'WTS_DataExtractor',
-            'WTS_ExportManager',
-            'WTS_StoreManager',
-            'WTS_UIManager'
+            { name: 'WTS_Core', altName: 'WTSCore' }, // Handle namespace mismatch
+            { name: 'WTS_CSRFManager' },
+            { name: 'WTS_DataExtractor' },
+            { name: 'WTS_ExportManager' },
+            { name: 'WTS_StoreManager' },
+            { name: 'WTS_UIManager' }
         ];
         
-        const availableModules = [];
-        const missingModules = [];
+        const startTime = Date.now();
+        let allModulesReady = false;
         
-        for (const moduleName of requiredModules) {
-            if (typeof window[moduleName] !== 'undefined') {
-                availableModules.push(moduleName);
+        while (!allModulesReady && (Date.now() - startTime) < maxWaitTime) {
+            const availableModules = [];
+            const missingModules = [];
+            
+            for (const moduleInfo of requiredModules) {
+                const moduleName = moduleInfo.name;
+                const altName = moduleInfo.altName;
+                
+                // Check primary name first, then alternative name
+                let moduleFound = false;
+                let actualModule = null;
+                
+                if (typeof window[moduleName] !== 'undefined') {
+                    actualModule = window[moduleName];
+                    moduleFound = true;
+                } else if (altName && typeof window[altName] !== 'undefined') {
+                    actualModule = window[altName];
+                    moduleFound = true;
+                    log(`Using alternative namespace: ${altName} for ${moduleName}`, 'info');
+                }
+                
+                // Validate that it's actually a usable module (not just undefined)
+                if (moduleFound && actualModule !== null && typeof actualModule !== 'undefined') {
+                    // For classes, check if they're constructable
+                    if (typeof actualModule === 'function' || typeof actualModule === 'object') {
+                        availableModules.push(moduleName);
+                    } else {
+                        missingModules.push(`${moduleName} (invalid type: ${typeof actualModule})`);
+                    }
+                } else {
+                    missingModules.push(moduleName);
+                }
+            }
+            
+            log(`Module availability check: ${availableModules.length}/${requiredModules.length} modules loaded`);
+            
+            if (missingModules.length === 0) {
+                allModulesReady = true;
+                log('All required modules are available ✅');
+                return true;
             } else {
-                missingModules.push(moduleName);
+                log(`Still waiting for modules: ${missingModules.join(', ')}`, 'warn');
+                // Wait a bit before checking again
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
         
-        log(`Module availability check: ${availableModules.length}/${requiredModules.length} modules loaded`);
-        
-        if (missingModules.length > 0) {
-            log(`Missing modules: ${missingModules.join(', ')}`, 'warn');
-            return false;
-        }
-        
-        log('All required modules are available ✅');
-        return true;
+        log(`Module loading timeout after ${maxWaitTime}ms. Missing modules may cause initialization failure.`, 'error');
+        return false;
     }
     
     /**
@@ -112,13 +148,49 @@
         try {
             log('Initializing WTS Core system...');
             
-            // Create core instance
-            wtsCore = new window.WTS_Core();
+            // Handle namespace mismatch - try both WTS_Core and WTSCore
+            let CoreClass = null;
+            if (typeof window.WTS_Core !== 'undefined') {
+                CoreClass = window.WTS_Core;
+                log('Using WTS_Core class for initialization', 'info');
+            } else if (typeof window.WTSCore !== 'undefined') {
+                // If WTSCore is an instance, use its constructor, otherwise use it directly
+                if (typeof window.WTSCore === 'object' && window.WTSCore.constructor) {
+                    CoreClass = window.WTSCore.constructor;
+                    log('Using WTSCore instance constructor for initialization', 'info');
+                } else if (typeof window.WTSCore === 'function') {
+                    CoreClass = window.WTSCore;
+                    log('Using WTSCore class for initialization', 'info');
+                } else {
+                    // WTSCore is already an instance, use it directly
+                    wtsCore = window.WTSCore;
+                    log('Using existing WTSCore instance', 'info');
+                }
+            } else {
+                throw new Error('Neither WTS_Core nor WTSCore is available');
+            }
             
-            // Initialize core
-            const coreInitialized = await wtsCore.initialize();
-            if (!coreInitialized) {
-                throw new Error('Failed to initialize WTS Core');
+            // Create core instance if we don't already have one
+            if (!wtsCore && CoreClass) {
+                wtsCore = new CoreClass();
+            }
+            
+            if (!wtsCore) {
+                throw new Error('Failed to create or obtain WTS Core instance');
+            }
+            
+            // Initialize core if it has an initialize method and isn't already initialized
+            if (typeof wtsCore.initialize === 'function') {
+                if (!wtsCore.initialized) {
+                    const coreInitialized = await wtsCore.initialize();
+                    if (!coreInitialized) {
+                        throw new Error('Failed to initialize WTS Core');
+                    }
+                } else {
+                    log('WTS Core already initialized, skipping initialization', 'info');
+                }
+            } else {
+                log('WTS Core does not have initialize method, assuming ready', 'info');
             }
             
             log('WTS Core initialized successfully ✅');
@@ -255,27 +327,87 @@
     async function handleInitializationError(error) {
         initializationAttempts++;
         
-        log(`Initialization attempt ${initializationAttempts} failed: ${error.message}`, 'error');
+        log(`❌ Initialization attempt ${initializationAttempts} failed: ${error.message}`, 'error');
+        log(`Error stack: ${error.stack}`, 'error');
+        
+        // Provide detailed diagnostic information
+        const diagnostics = await gatherDiagnosticInfo();
+        log('Diagnostic information:', 'info');
+        log(`- DOM Ready: ${diagnostics.domReady}`, 'info');
+        log(`- Available modules: ${diagnostics.availableModules.join(', ') || 'none'}`, 'info');
+        log(`- Missing modules: ${diagnostics.missingModules.join(', ') || 'none'}`, 'info');
+        log(`- WTS_Core available: ${diagnostics.coreAvailable}`, 'info');
+        log(`- WTSCore available: ${diagnostics.altCoreAvailable}`, 'info');
         
         if (initializationAttempts < MAX_INIT_ATTEMPTS) {
-            log(`Retrying initialization in ${INIT_RETRY_DELAY}ms... (attempt ${initializationAttempts + 1}/${MAX_INIT_ATTEMPTS})`);
+            const retryDelay = INIT_RETRY_DELAY * initializationAttempts; // Exponential backoff
+            log(`🔄 Retrying initialization in ${retryDelay}ms... (attempt ${initializationAttempts + 1}/${MAX_INIT_ATTEMPTS})`, 'warn');
             
             setTimeout(() => {
                 initializeApplication();
-            }, INIT_RETRY_DELAY);
+            }, retryDelay);
         } else {
-            log('Maximum initialization attempts reached. WTS startup failed.', 'error');
+            log('💥 Maximum initialization attempts reached. WTS startup failed.', 'error');
             
-            // Show user-friendly error message
+            // Show detailed error information to user
+            const errorDetails = `
+WTS Initialization Failed
+
+Attempt: ${initializationAttempts}/${MAX_INIT_ATTEMPTS}
+Error: ${error.message}
+
+Diagnostics:
+• DOM Ready: ${diagnostics.domReady}
+• Available Modules: ${diagnostics.availableModules.length}/${diagnostics.totalModules}
+• Core Available: ${diagnostics.coreAvailable || diagnostics.altCoreAvailable}
+
+This may be due to:
+• Network connectivity issues loading remote modules
+• Browser security restrictions
+• Module loading race conditions
+• Corrupted or missing module files
+
+Check the browser console for detailed logs.
+            `.trim();
+            
             if (typeof alert !== 'undefined') {
-                alert('❌ WTS failed to initialize after multiple attempts.\n\n' +
-                      'This may be due to:\n' +
-                      '• Missing or corrupted module files\n' +
-                      '• Network connectivity issues\n' +
-                      '• Browser compatibility problems\n\n' +
-                      'Please refresh the page or check the browser console for details.');
+                alert(errorDetails);
+            }
+            
+            // Activate emergency fallback
+            emergencyFallback();
+        }
+    }
+    
+    /**
+     * Gather diagnostic information for troubleshooting
+     */
+    async function gatherDiagnosticInfo() {
+        const requiredModuleNames = [
+            'WTS_Core', 'WTS_CSRFManager', 'WTS_DataExtractor',
+            'WTS_ExportManager', 'WTS_StoreManager', 'WTS_UIManager'
+        ];
+        
+        const availableModules = [];
+        const missingModules = [];
+        
+        for (const moduleName of requiredModuleNames) {
+            if (typeof window[moduleName] !== 'undefined') {
+                availableModules.push(moduleName);
+            } else {
+                missingModules.push(moduleName);
             }
         }
+        
+        return {
+            domReady: document.readyState === 'complete',
+            availableModules,
+            missingModules,
+            totalModules: requiredModuleNames.length,
+            coreAvailable: typeof window.WTS_Core !== 'undefined',
+            altCoreAvailable: typeof window.WTSCore !== 'undefined',
+            timestamp: new Date().toISOString()
+        };
     }
     
     /**
@@ -285,30 +417,41 @@
         try {
             log('🚀 Starting WTS v2.0.0 initialization...');
             
-            // Check if modules are available
-            if (!checkModuleAvailability()) {
-                throw new Error('Required modules are not available');
+            // Step 1: Wait for modules to be available with timeout
+            log('Step 1: Checking module availability...');
+            const modulesAvailable = await checkModuleAvailability(15000); // 15 second timeout
+            if (!modulesAvailable) {
+                throw new Error('Required modules are not available after timeout');
             }
             
-            // Initialize core system
+            // Step 2: Initialize core system
+            log('Step 2: Initializing core system...');
             const coreReady = await initializeCore();
             if (!coreReady) {
                 throw new Error('Core initialization failed');
             }
             
-            // Initialize all modules
+            // Step 3: Initialize all modules
+            log('Step 3: Initializing modules...');
             const modulesReady = await initializeModules();
             if (!modulesReady) {
                 throw new Error('Module initialization failed');
             }
             
-            // Start application services
+            // Step 4: Start application services
+            log('Step 4: Starting application services...');
             const appStarted = await startApplication();
             if (!appStarted) {
                 throw new Error('Application startup failed');
             }
             
             log('🎉 WTS initialization completed successfully!');
+            
+            // Clear the emergency fallback timer since we succeeded
+            if (typeof fallbackTimer !== 'undefined') {
+                clearTimeout(fallbackTimer);
+                log('Emergency fallback timer cleared', 'info');
+            }
             
         } catch (error) {
             await handleInitializationError(error);

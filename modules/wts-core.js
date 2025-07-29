@@ -880,7 +880,16 @@ if (typeof module !== 'undefined' && module.exports) {
     window.WTS_Core = WTS_Core;
 }
 
-// Auto-initialize if in browser environment
-if (typeof window !== 'undefined' && !window.WTSCore) {
-    window.WTSCore = new WTS_Core();
+// Auto-initialize if in browser environment and ensure both namespaces are available
+if (typeof window !== 'undefined') {
+    // Create instance if it doesn't exist
+    if (!window.WTSCore) {
+        window.WTSCore = new WTS_Core();
+    }
+    
+    // Ensure both namespaces point to the same thing for compatibility
+    // Main script expects WTS_Core class, but also check for WTSCore instance
+    if (!window.WTS_Core && window.WTSCore && window.WTSCore.constructor) {
+        window.WTS_Core = window.WTSCore.constructor;
+    }
 }
