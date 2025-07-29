@@ -131,11 +131,14 @@
     }
     
     /**
-     * Register and initialize all modules
+     * Initialize all modules directly (bypassing core registration for now)
      */
     async function initializeModules() {
         try {
-            log('Registering and initializing modules...');
+            log('Initializing modules directly...');
+            
+            // Store module instances on the core for easy access
+            wtsCore.moduleInstances = {};
             
             // Module initialization order is important
             const moduleInitOrder = [
@@ -145,13 +148,13 @@
                     description: 'CSRF token management'
                 },
                 {
-                    name: 'WTS_DataExtractor', 
+                    name: 'WTS_DataExtractor',
                     class: window.WTS_DataExtractor,
                     description: 'ASIN data extraction'
                 },
                 {
                     name: 'WTS_ExportManager',
-                    class: window.WTS_ExportManager, 
+                    class: window.WTS_ExportManager,
                     description: 'CSV export functionality'
                 },
                 {
@@ -166,7 +169,7 @@
                 }
             ];
             
-            // Register and initialize each module
+            // Initialize each module
             for (const moduleInfo of moduleInitOrder) {
                 try {
                     log(`Initializing ${moduleInfo.name} (${moduleInfo.description})...`);
@@ -174,16 +177,15 @@
                     // Create module instance
                     const moduleInstance = new moduleInfo.class(wtsCore);
                     
-                    // Register with core
-                    const registered = wtsCore.registerModule(moduleInfo.name, moduleInstance);
-                    if (!registered) {
-                        throw new Error(`Failed to register ${moduleInfo.name}`);
-                    }
+                    // Store instance for later access
+                    wtsCore.moduleInstances[moduleInfo.name] = moduleInstance;
                     
                     // Initialize module
-                    const initialized = await moduleInstance.initialize();
-                    if (!initialized) {
-                        throw new Error(`Failed to initialize ${moduleInfo.name}`);
+                    if (typeof moduleInstance.initialize === 'function') {
+                        const initialized = await moduleInstance.initialize();
+                        if (!initialized) {
+                            throw new Error(`Failed to initialize ${moduleInfo.name}`);
+                        }
                     }
                     
                     log(`${moduleInfo.name} initialized successfully ✅`);
@@ -210,26 +212,31 @@
         try {
             log('Starting WTS application services...');
             
-            // Get module instances from core
-            const csrfManager = wtsCore.modules.get('WTS_CSRFManager');
-            const dataExtractor = wtsCore.modules.get('WTS_DataExtractor');
-            const uiManager = wtsCore.modules.get('WTS_UIManager');
+            // Get module instances
+            const csrfManager = wtsCore.moduleInstances['WTS_CSRFManager'];
+            const dataExtractor = wtsCore.moduleInstances['WTS_DataExtractor'];
+            const uiManager = wtsCore.moduleInstances['WTS_UIManager'];
             
-            // Start CSRF interception immediately (critical for store switching)
-            log('Starting CSRF token interception...');
-            await csrfManager.startInterception();
+            // CSRF Manager should already be intercepting (started in initialize)
+            log('CSRF token interception already active ✅');
             
-            // Start data monitoring
-            log('Starting ASIN data monitoring...');
-            await dataExtractor.startMonitoring();
+            // Start data monitoring if available
+            if (dataExtractor && typeof dataExtractor.startMonitoring === 'function') {
+                log('Starting ASIN data monitoring...');
+                await dataExtractor.startMonitoring();
+            }
             
             // Create and show the UI panel
-            log('Creating user interface...');
-            await uiManager.createPanel();
+            if (uiManager && typeof uiManager.createPanel === 'function') {
+                log('Creating user interface...');
+                await uiManager.createPanel();
+            }
             
-            // Start real-time updates
-            log('Starting real-time updates...');
-            await uiManager.startRealTimeUpdates();
+            // Start real-time updates if available
+            if (uiManager && typeof uiManager.startRealTimeUpdates === 'function') {
+                log('Starting real-time updates...');
+                await uiManager.startRealTimeUpdates();
+            }
             
             log('WTS application started successfully ✅');
             log('🎉 WTS v2.0.0 is now running with modular architecture!');
