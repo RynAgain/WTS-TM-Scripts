@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.001
+// @version      2.0.002
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -246,8 +246,34 @@
                 try {
                     log(`Initializing ${moduleInfo.name} (${moduleInfo.description})...`);
                     
-                    // Create module instance
-                    const moduleInstance = new moduleInfo.class(wtsCore);
+                    // Create module instance with proper dependencies
+                    let moduleInstance;
+                    
+                    // Handle modules that require specific dependencies
+                    if (moduleInfo.name === 'WTS_StoreManager') {
+                        // StoreManager needs CSRFManager instance
+                        const csrfManager = wtsCore.moduleInstances['WTS_CSRFManager'];
+                        if (!csrfManager) {
+                            throw new Error('WTS_StoreManager requires WTS_CSRFManager to be initialized first');
+                        }
+                        moduleInstance = new moduleInfo.class(wtsCore, csrfManager);
+                    } else if (moduleInfo.name === 'WTS_UIManager') {
+                        // UIManager might need other module instances
+                        const csrfManager = wtsCore.moduleInstances['WTS_CSRFManager'];
+                        const dataExtractor = wtsCore.moduleInstances['WTS_DataExtractor'];
+                        const exportManager = wtsCore.moduleInstances['WTS_ExportManager'];
+                        const storeManager = wtsCore.moduleInstances['WTS_StoreManager'];
+                        
+                        moduleInstance = new moduleInfo.class(wtsCore, {
+                            csrfManager,
+                            dataExtractor,
+                            exportManager,
+                            storeManager
+                        });
+                    } else {
+                        // Standard initialization with just core
+                        moduleInstance = new moduleInfo.class(wtsCore);
+                    }
                     
                     // Store instance for later access
                     wtsCore.moduleInstances[moduleInfo.name] = moduleInstance;
