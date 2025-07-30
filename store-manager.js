@@ -49,7 +49,7 @@
             newMappings.forEach((storeId, storeCode) => {
                 storeMappingData.set(storeCode, storeId);
             });
-            this.saveStoredMappings();
+            window.WTSStoreManager.saveStoredMappings();
         },
 
         // Get all store mappings
@@ -166,7 +166,7 @@
                         const newMappings = window.WTSDataExtractor.parseCSV(csvText);
                         
                         // Update the store mapping data
-                        this.updateMappings(newMappings);
+                        window.WTSStoreManager.updateMappings(newMappings);
 
                         resolve({
                             success: true,
@@ -193,7 +193,7 @@
 
         // Initialize the store manager
         init() {
-            this.loadStoredMappings();
+            window.WTSStoreManager.loadStoredMappings();
         }
     };
 

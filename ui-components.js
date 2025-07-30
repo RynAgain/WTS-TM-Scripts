@@ -267,7 +267,7 @@
                     try {
                         const result = await window.WTSStoreManager.handleFileUpload(file);
                         alert(`✅ Successfully loaded ${result.count} store mappings from ${result.fileName}`);
-                        this.updateStoreUI();
+                        window.WTSUIComponents.updateStoreUI();
                     } catch (error) {
                         alert(`❌ ${error.message}`);
                     }
@@ -353,7 +353,7 @@
             container.appendChild(fileInput);
 
             // Initialize store UI
-            this.updateStoreUI();
+            window.WTSUIComponents.updateStoreUI();
         },
 
         // Update store UI based on current mappings
@@ -400,7 +400,7 @@
             csrfSettingsBtn.style.marginTop = '8px';
 
             csrfSettingsBtn.addEventListener('click', () => {
-                this.showCSRFSettings();
+                window.WTSUIComponents.showCSRFSettings();
             });
 
             container.appendChild(csrfSettingsBtn);
@@ -550,7 +550,7 @@
             counter.style.textAlign = 'center';
             
             // Find the panel and append to its content container
-            const contentContainer = this.panel?.querySelector('div:last-child');
+            const contentContainer = panel?.querySelector('div:last-child');
             contentContainer?.appendChild(counter);
 
             // Update counter every second
@@ -562,8 +562,8 @@
 
         // Initialize the UI
         init() {
-            this.createControlPanel();
-            this.addCardCounter();
+            window.WTSUIComponents.createControlPanel();
+            window.WTSUIComponents.addCardCounter();
         }
     };
 

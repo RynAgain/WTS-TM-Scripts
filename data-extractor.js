@@ -104,7 +104,7 @@
 
         // Get current card count for display
         getCurrentCardCount() {
-            const { data, emptyCount } = this.extractDataFromCards();
+            const { data, emptyCount } = window.WTSDataExtractor.extractDataFromCards();
             return {
                 visibleCount: data.length,
                 emptyCount: emptyCount,

@@ -247,7 +247,7 @@
             console.log(`\n🔄 CSRF Token Extraction Starting...`);
             
             // Priority 1: Check for recently captured token from network requests
-            const capturedToken = this.getCapturedToken();
+            const capturedToken = window.WTSCSRFManager.getCapturedToken();
             if (capturedToken) {
                 console.log("✅ Using recently captured token from network requests");
                 return capturedToken;
@@ -257,7 +257,7 @@
             for (let attempt = 1; attempt <= maxRetries; attempt++) {
                 console.log(`\n🔄 DOM Extraction Attempt ${attempt}/${maxRetries}`);
                 
-                const token = this.extractCSRFToken();
+                const token = window.WTSCSRFManager.extractCSRFToken();
                 if (token) {
                     console.log(`✅ Token found via DOM extraction on attempt ${attempt}`);
                     return token;
@@ -275,7 +275,7 @@
             const useFallback = GM_getValue('useFallbackCSRF', true);
             if (useFallback) {
                 console.log("🔄 Attempting fallback token...");
-                return this.getFallbackToken();
+                return window.WTSCSRFManager.getFallbackToken();
             }
             
             return null;
@@ -283,7 +283,7 @@
 
         // Initialize the CSRF manager
         init() {
-            this.startNetworkInterception();
+            window.WTSCSRFManager.startNetworkInterception();
         }
     };
 
