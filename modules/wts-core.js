@@ -903,19 +903,10 @@ class WTS_Core {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = WTS_Core;
 } else if (typeof window !== 'undefined') {
+    // Always export the class, not an instance
     window.WTS_Core = WTS_Core;
-}
-
-// Auto-initialize if in browser environment and ensure both namespaces are available
-if (typeof window !== 'undefined') {
-    // Create instance if it doesn't exist
-    if (!window.WTSCore) {
-        window.WTSCore = new WTS_Core();
-    }
     
-    // Ensure both namespaces point to the same thing for compatibility
-    // Main script expects WTS_Core class, but also check for WTSCore instance
-    if (!window.WTS_Core && window.WTSCore && window.WTSCore.constructor) {
-        window.WTS_Core = window.WTSCore.constructor;
-    }
+    // For backward compatibility, also provide WTSCore as the class
+    // The main script will create the instance when needed
+    window.WTSCore = WTS_Core;
 }

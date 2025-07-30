@@ -751,8 +751,6 @@ if (typeof module !== 'undefined' && module.exports) {
     window.WTS_CSRFManager = WTS_CSRFManager;
     window.createCSRFManager = createCSRFManager;
     
-    // Auto-register if WTSCore is available
-    if (window.WTSCore) {
-        window.WTSCSRFManager = createCSRFManager(window.WTSCore);
-    }
+    // Don't auto-register - let the main script handle initialization
+    // This prevents race conditions and ensures proper initialization order
 }

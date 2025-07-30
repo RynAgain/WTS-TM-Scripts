@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.008
+// @version      2.0.009
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -9,6 +9,7 @@
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
 // @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
+
 // @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-core.js
 // @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-csrf-manager.js
 // @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-data-extractor.js
@@ -79,12 +80,12 @@
      */
     async function checkModuleAvailability(maxWaitTime = 10000) {
         const requiredModules = [
-            { name: 'WTS_Core', altName: 'WTSCore' }, // Handle namespace mismatch
-            { name: 'WTS_CSRFManager' },
-            { name: 'WTS_DataExtractor' },
-            { name: 'WTS_ExportManager' },
-            { name: 'WTS_StoreManager' },
-            { name: 'WTS_UIManager' }
+            { name: 'WTS_Core', expectedType: 'function' },
+            { name: 'WTS_CSRFManager', expectedType: 'function' },
+            { name: 'WTS_DataExtractor', expectedType: 'function' },
+            { name: 'WTS_ExportManager', expectedType: 'function' },
+            { name: 'WTS_StoreManager', expectedType: 'function' },
+            { name: 'WTS_UIManager', expectedType: 'function' }
         ];
         
         const startTime = Date.now();
@@ -93,51 +94,57 @@
         while (!allModulesReady && (Date.now() - startTime) < maxWaitTime) {
             const availableModules = [];
             const missingModules = [];
+            const invalidModules = [];
             
             for (const moduleInfo of requiredModules) {
                 const moduleName = moduleInfo.name;
-                const altName = moduleInfo.altName;
+                const expectedType = moduleInfo.expectedType;
+                const actualModule = window[moduleName];
                 
-                // Check primary name first, then alternative name
-                let moduleFound = false;
-                let actualModule = null;
-                
-                if (typeof window[moduleName] !== 'undefined') {
-                    actualModule = window[moduleName];
-                    moduleFound = true;
-                } else if (altName && typeof window[altName] !== 'undefined') {
-                    actualModule = window[altName];
-                    moduleFound = true;
-                    log(`Using alternative namespace: ${altName} for ${moduleName}`, 'info');
-                }
-                
-                // Validate that it's actually a usable module (not just undefined)
-                if (moduleFound && actualModule !== null && typeof actualModule !== 'undefined') {
-                    // For classes, check if they're constructable
-                    if (typeof actualModule === 'function' || typeof actualModule === 'object') {
-                        availableModules.push(moduleName);
-                    } else {
-                        missingModules.push(`${moduleName} (invalid type: ${typeof actualModule})`);
-                    }
-                } else {
+                if (typeof actualModule === 'undefined') {
                     missingModules.push(moduleName);
+                } else if (typeof actualModule !== expectedType) {
+                    invalidModules.push(`${moduleName} (expected ${expectedType}, got ${typeof actualModule})`);
+                } else {
+                    // Additional validation for functions (classes)
+                    if (expectedType === 'function') {
+                        try {
+                            // Check if it looks like a class constructor
+                            const hasPrototype = actualModule.prototype && typeof actualModule.prototype === 'object';
+                            if (hasPrototype) {
+                                availableModules.push(moduleName);
+                            } else {
+                                invalidModules.push(`${moduleName} (not a valid class constructor)`);
+                            }
+                        } catch (error) {
+                            invalidModules.push(`${moduleName} (validation error: ${error.message})`);
+                        }
+                    } else {
+                        availableModules.push(moduleName);
+                    }
                 }
             }
             
-            log(`Module availability check: ${availableModules.length}/${requiredModules.length} modules loaded`);
+            const totalIssues = missingModules.length + invalidModules.length;
+            log(`Module availability: ${availableModules.length}/${requiredModules.length} ready, ${totalIssues} issues`);
             
-            if (missingModules.length === 0) {
+            if (totalIssues === 0) {
                 allModulesReady = true;
-                log('All required modules are available ✅');
+                log('All required modules are available and valid ✅');
                 return true;
             } else {
-                log(`Still waiting for modules: ${missingModules.join(', ')}`, 'warn');
+                if (missingModules.length > 0) {
+                    log(`Missing modules: ${missingModules.join(', ')}`, 'warn');
+                }
+                if (invalidModules.length > 0) {
+                    log(`Invalid modules: ${invalidModules.join(', ')}`, 'warn');
+                }
                 // Wait a bit before checking again
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
         }
         
-        log(`Module loading timeout after ${maxWaitTime}ms. Missing modules may cause initialization failure.`, 'error');
+        log(`Module loading timeout after ${maxWaitTime}ms. Modules failed to load properly.`, 'error');
         return false;
     }
     
@@ -148,52 +155,33 @@
         try {
             log('Initializing WTS Core system...');
             
-            // Handle namespace mismatch - try both WTS_Core and WTSCore
+            // Both WTS_Core and WTSCore should now be the same class (not instance)
             let CoreClass = null;
-            if (typeof window.WTS_Core !== 'undefined') {
+            if (typeof window.WTS_Core === 'function') {
                 CoreClass = window.WTS_Core;
                 log('Using WTS_Core class for initialization', 'info');
-            } else if (typeof window.WTSCore !== 'undefined') {
-                // If WTSCore is an instance, use its constructor, otherwise use it directly
-                if (typeof window.WTSCore === 'object' && window.WTSCore.constructor) {
-                    CoreClass = window.WTSCore.constructor;
-                    log('Using WTSCore instance constructor for initialization', 'info');
-                } else if (typeof window.WTSCore === 'function') {
-                    CoreClass = window.WTSCore;
-                    log('Using WTSCore class for initialization', 'info');
-                } else {
-                    // WTSCore is already an instance, use it directly
-                    wtsCore = window.WTSCore;
-                    log('Using existing WTSCore instance', 'info');
-                }
+            } else if (typeof window.WTSCore === 'function') {
+                CoreClass = window.WTSCore;
+                log('Using WTSCore class for initialization', 'info');
             } else {
-                throw new Error('Neither WTS_Core nor WTSCore is available');
+                throw new Error('WTS_Core class is not available - modules may not have loaded properly');
             }
             
-            // Create core instance if we don't already have one
-            if (!wtsCore && CoreClass) {
-                wtsCore = new CoreClass();
-            }
+            // Create core instance
+            wtsCore = new CoreClass();
+            log('WTS Core instance created successfully', 'info');
             
-            if (!wtsCore) {
-                throw new Error('Failed to create or obtain WTS Core instance');
-            }
-            
-            // Initialize core if it has an initialize method and isn't already initialized
+            // Initialize core
             if (typeof wtsCore.initialize === 'function') {
-                if (!wtsCore.initialized) {
-                    const coreInitialized = await wtsCore.initialize();
-                    if (!coreInitialized) {
-                        throw new Error('Failed to initialize WTS Core');
-                    }
-                } else {
-                    log('WTS Core already initialized, skipping initialization', 'info');
+                const coreInitialized = await wtsCore.initialize();
+                if (!coreInitialized) {
+                    throw new Error('Failed to initialize WTS Core');
                 }
+                log('WTS Core initialized successfully ✅');
             } else {
                 log('WTS Core does not have initialize method, assuming ready', 'info');
             }
             
-            log('WTS Core initialized successfully ✅');
             return true;
             
         } catch (error) {
@@ -500,14 +488,32 @@ Check the browser console for detailed logs.
     
     /**
      * Wait for DOM to be ready, then initialize
+     * Uses window.onload instead of DOMContentLoaded for better reliability
      */
     function waitForDOMAndInitialize() {
-        if (document.readyState === 'loading') {
-            log('Waiting for DOM to be ready...');
-            document.addEventListener('DOMContentLoaded', initializeApplication);
-        } else {
-            log('DOM is ready, starting initialization...');
+        if (document.readyState === 'complete') {
+            log('DOM is fully loaded, starting initialization immediately...');
             initializeApplication();
+        } else if (document.readyState === 'interactive') {
+            log('DOM is interactive, starting initialization...');
+            initializeApplication();
+        } else {
+            log('Waiting for DOM to be ready...');
+            // Use window.onload instead of DOMContentLoaded for better reliability
+            // This ensures all resources are loaded, reducing race conditions
+            window.addEventListener('load', initializeApplication);
+            
+            // Fallback: also listen for DOMContentLoaded in case window.onload takes too long
+            document.addEventListener('DOMContentLoaded', () => {
+                log('DOM content loaded, will initialize if not already started...');
+                // Add a small delay to let any remaining scripts finish
+                setTimeout(() => {
+                    if (!wtsCore) {
+                        log('Fallback initialization triggered by DOMContentLoaded');
+                        initializeApplication();
+                    }
+                }, 1000);
+            });
         }
     }
     

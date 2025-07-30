@@ -889,26 +889,35 @@ class WTS_UIManager {
      * @private
      */
     async _getModuleReferences() {
-        this.core.log('[DIAGNOSTIC] UI Manager getting module references...', 'debug');
+        this.core.log('[DIAGNOSTIC] UI Manager directly instantiating modules (simplified approach)...', 'debug');
         
-        this.modules.dataExtractor = this.core.getModule('WTS_DataExtractor');
-        this.core.log(`[DIAGNOSTIC] DataExtractor: ${this.modules.dataExtractor ? 'FOUND' : 'NOT FOUND'}`, 'debug');
-        
-        this.modules.exportManager = this.core.getModule('WTS_ExportManager');
-        this.core.log(`[DIAGNOSTIC] ExportManager: ${this.modules.exportManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
-        
-        this.modules.storeManager = this.core.getModule('WTS_StoreManager');
-        this.core.log(`[DIAGNOSTIC] StoreManager: ${this.modules.storeManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
-        
-        this.modules.csrfManager = this.core.getModule('WTS_CSRFManager');
-        this.core.log(`[DIAGNOSTIC] CSRFManager: ${this.modules.csrfManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
-        
-        // Also check what modules are actually registered in core
-        if (this.core.modules && typeof this.core.modules.keys === 'function') {
-            const registeredModules = Array.from(this.core.modules.keys());
-            this.core.log(`[DIAGNOSTIC] Modules registered in core: ${registeredModules.join(', ')}`, 'debug');
-        } else {
-            this.core.log('[DIAGNOSTIC] Core modules Map not accessible', 'error');
+        try {
+            // Since Tampermonkey concatenates all @require files, we can directly instantiate modules
+            // First create CSRF Manager (needed by Store Manager)
+            this.modules.csrfManager = new WTS_CSRFManager(this.core);
+            await this.modules.csrfManager.initialize();
+            this.core.log(`[DIAGNOSTIC] CSRFManager: CREATED AND INITIALIZED`, 'debug');
+            
+            // Create Data Extractor
+            this.modules.dataExtractor = new WTS_DataExtractor(this.core);
+            await this.modules.dataExtractor.initialize();
+            this.core.log(`[DIAGNOSTIC] DataExtractor: CREATED AND INITIALIZED`, 'debug');
+            
+            // Create Export Manager
+            this.modules.exportManager = new WTS_ExportManager(this.core);
+            await this.modules.exportManager.initialize();
+            this.core.log(`[DIAGNOSTIC] ExportManager: CREATED AND INITIALIZED`, 'debug');
+            
+            // Create Store Manager (needs CSRF Manager)
+            this.modules.storeManager = new WTS_StoreManager(this.core, this.modules.csrfManager);
+            await this.modules.storeManager.initialize();
+            this.core.log(`[DIAGNOSTIC] StoreManager: CREATED AND INITIALIZED`, 'debug');
+            
+            this.core.log('[DIAGNOSTIC] All modules successfully instantiated directly!', 'info');
+            
+        } catch (error) {
+            this.core.log(`[DIAGNOSTIC] Error during direct module instantiation: ${error.message}`, 'error');
+            this.core.log(`[DIAGNOSTIC] Error stack: ${error.stack}`, 'error');
         }
     }
 

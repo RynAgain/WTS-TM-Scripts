@@ -612,16 +612,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = WTS_DataExtractor;
 } else if (typeof window !== 'undefined') {
     window.WTS_DataExtractor = WTS_DataExtractor;
-}
-
-// Auto-register with WTS Core if available
-if (typeof window !== 'undefined' && window.WTSCore) {
-    const dataExtractor = new WTS_DataExtractor(window.WTSCore);
-    window.WTSCore.registerModule('WTS_DataExtractor', {
-        version: dataExtractor.version,
-        initialize: () => dataExtractor.initialize(),
-        cleanup: () => dataExtractor.cleanup(),
-        dependencies: dataExtractor.dependencies,
-        instance: dataExtractor
-    });
+    
+    // Don't auto-register - let the main script handle initialization
+    // This prevents race conditions and ensures proper initialization order
 }
