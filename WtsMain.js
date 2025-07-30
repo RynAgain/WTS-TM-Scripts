@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.003
+// @version      2.0.004
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -275,8 +275,16 @@
                         moduleInstance = new moduleInfo.class(wtsCore);
                     }
                     
-                    // Store instance for later access
+                    // Store instance for later access in both places for compatibility
                     wtsCore.moduleInstances[moduleInfo.name] = moduleInstance;
+                    
+                    // Also register with the core's module system so getModule() works
+                    if (typeof wtsCore.registerModule === 'function') {
+                        wtsCore.registerModule(moduleInfo.name, moduleInstance);
+                    } else {
+                        // Fallback: directly add to modules Map
+                        wtsCore.modules.set(moduleInfo.name, moduleInstance);
+                    }
                     
                     // Initialize module
                     if (typeof moduleInstance.initialize === 'function') {
