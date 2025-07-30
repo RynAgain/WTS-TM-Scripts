@@ -13,30 +13,34 @@
     'use strict';
 
     // UI Components Module
+    let panel = null;
+    let lastExtractedData = [];
+
     window.WTSUIComponents = {
-        panel: null,
-        lastExtractedData: [],
+        get panel() { return panel; },
+        get lastExtractedData() { return lastExtractedData; },
+        set lastExtractedData(value) { lastExtractedData = value; },
 
         // Create the main control panel
         createControlPanel() {
             // Load saved panel position or use default
             const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
             
-            this.panel = document.createElement('div');
-            this.panel.style.position = 'fixed';
-            this.panel.style.top = savedPosition.y + 'px';
-            this.panel.style.left = savedPosition.x + 'px';
-            this.panel.style.zIndex = '9999';
-            this.panel.style.background = '#f9f9f9';
-            this.panel.style.border = '1px solid #ccc';
-            this.panel.style.borderRadius = '8px';
-            this.panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-            this.panel.style.padding = '0';
-            this.panel.style.display = 'flex';
-            this.panel.style.flexDirection = 'column';
-            this.panel.style.fontFamily = 'sans-serif';
-            this.panel.style.transition = 'box-shadow 0.2s ease';
-            this.panel.style.userSelect = 'none';
+            panel = document.createElement('div');
+            panel.style.position = 'fixed';
+            panel.style.top = savedPosition.y + 'px';
+            panel.style.left = savedPosition.x + 'px';
+            panel.style.zIndex = '9999';
+            panel.style.background = '#f9f9f9';
+            panel.style.border = '1px solid #ccc';
+            panel.style.borderRadius = '8px';
+            panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+            panel.style.padding = '0';
+            panel.style.display = 'flex';
+            panel.style.flexDirection = 'column';
+            panel.style.fontFamily = 'sans-serif';
+            panel.style.transition = 'box-shadow 0.2s ease';
+            panel.style.userSelect = 'none';
 
             // Create drag handle header
             const dragHeader = this.createDragHeader();
@@ -47,15 +51,15 @@
             // Add drag functionality
             this.addDragFunctionality(dragHeader);
 
-            this.panel.appendChild(dragHeader);
-            this.panel.appendChild(contentContainer);
+            panel.appendChild(dragHeader);
+            panel.appendChild(contentContainer);
 
             // Add buttons and components
             this.addControlButtons(contentContainer);
             this.addStoreManagement(contentContainer);
             this.addCSRFSettings(contentContainer);
 
-            document.body.appendChild(this.panel);
+            document.body.appendChild(panel);
         },
 
         // Create drag handle header
@@ -105,13 +109,13 @@
 
             const handleMouseDown = (e) => {
                 isDragging = true;
-                const rect = this.panel.getBoundingClientRect();
+                const rect = panel.getBoundingClientRect();
                 dragOffset.x = e.clientX - rect.left;
                 dragOffset.y = e.clientY - rect.top;
                 
                 // Visual feedback
-                this.panel.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
-                this.panel.style.transform = 'scale(1.02)';
+                panel.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
+                panel.style.transform = 'scale(1.02)';
                 dragHeader.style.background = '#dee2e6';
                 document.body.style.cursor = 'move';
                 
@@ -125,7 +129,7 @@
                 let newY = e.clientY - dragOffset.y;
                 
                 // Boundary constraints
-                const panelRect = this.panel.getBoundingClientRect();
+                const panelRect = panel.getBoundingClientRect();
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
                 
@@ -133,8 +137,8 @@
                 newX = Math.max(0, Math.min(newX, viewportWidth - panelRect.width));
                 newY = Math.max(0, Math.min(newY, viewportHeight - panelRect.height));
                 
-                this.panel.style.left = newX + 'px';
-                this.panel.style.top = newY + 'px';
+                panel.style.left = newX + 'px';
+                panel.style.top = newY + 'px';
                 
                 e.preventDefault();
             };
@@ -145,13 +149,13 @@
                 isDragging = false;
                 
                 // Save position
-                const rect = this.panel.getBoundingClientRect();
+                const rect = panel.getBoundingClientRect();
                 const position = { x: rect.left, y: rect.top };
                 GM_setValue('wts_panel_position', position);
                 
                 // Reset visual feedback
-                this.panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-                this.panel.style.transform = 'scale(1)';
+                panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                panel.style.transform = 'scale(1)';
                 dragHeader.style.background = '#e9ecef';
                 document.body.style.cursor = '';
             };
@@ -163,7 +167,7 @@
 
             // Handle window resize to keep panel in bounds
             window.addEventListener('resize', () => {
-                const rect = this.panel.getBoundingClientRect();
+                const rect = panel.getBoundingClientRect();
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
                 
@@ -182,8 +186,8 @@
                 newY = Math.max(0, newY);
                 
                 if (newX !== rect.left || newY !== rect.top) {
-                    this.panel.style.left = newX + 'px';
-                    this.panel.style.top = newY + 'px';
+                    panel.style.left = newX + 'px';
+                    panel.style.top = newY + 'px';
                     GM_setValue('wts_panel_position', { x: newX, y: newY });
                 }
             });
@@ -202,9 +206,9 @@
             exportBtn.style.cursor = 'pointer';
 
             exportBtn.addEventListener('click', () => {
-                if (this.lastExtractedData.length === 0) {
+                if (lastExtractedData.length === 0) {
                     const { data, emptyCount } = window.WTSDataExtractor.extractDataFromCards();
-                    this.lastExtractedData = data;
+                    lastExtractedData = data;
                     alert(`${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
 
                     if (data.length === 0) {
@@ -212,7 +216,7 @@
                         return;
                     }
                 }
-                window.WTSDataExtractor.downloadCSV(this.lastExtractedData);
+                window.WTSDataExtractor.downloadCSV(lastExtractedData);
             });
 
             // Refresh button
@@ -226,9 +230,9 @@
             refreshBtn.style.cursor = 'pointer';
 
             refreshBtn.addEventListener('click', () => {
-                this.lastExtractedData = [];
+                lastExtractedData = [];
                 const { data, emptyCount } = window.WTSDataExtractor.extractDataFromCards();
-                this.lastExtractedData = data;
+                lastExtractedData = data;
                 alert(`🔄 Refreshed: ${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
             });
 

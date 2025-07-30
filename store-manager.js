@@ -13,28 +13,30 @@
     'use strict';
 
     // Store Management Module
+    let storeMappingData = new Map();
+
     window.WTSStoreManager = {
-        storeMappingData: new Map(),
+        get storeMappingData() { return storeMappingData; },
 
         // Load stored mappings from Tampermonkey storage
         loadStoredMappings() {
             try {
                 const storedData = GM_getValue('storeMappingData', '{}');
                 const parsedData = JSON.parse(storedData);
-                this.storeMappingData.clear();
+                storeMappingData.clear();
                 Object.entries(parsedData).forEach(([storeCode, storeId]) => {
-                    this.storeMappingData.set(storeCode, storeId);
+                    storeMappingData.set(storeCode, storeId);
                 });
             } catch (error) {
                 console.error('Error loading stored mappings:', error);
-                this.storeMappingData.clear();
+                storeMappingData.clear();
             }
         },
 
         // Save mappings to Tampermonkey storage
         saveStoredMappings() {
             try {
-                const dataToStore = Object.fromEntries(this.storeMappingData);
+                const dataToStore = Object.fromEntries(storeMappingData);
                 GM_setValue('storeMappingData', JSON.stringify(dataToStore));
             } catch (error) {
                 console.error('Error saving mappings:', error);
@@ -43,36 +45,36 @@
 
         // Update store mappings with new data
         updateMappings(newMappings) {
-            this.storeMappingData.clear();
+            storeMappingData.clear();
             newMappings.forEach((storeId, storeCode) => {
-                this.storeMappingData.set(storeCode, storeId);
+                storeMappingData.set(storeCode, storeId);
             });
             this.saveStoredMappings();
         },
 
         // Get all store mappings
         getAllMappings() {
-            return new Map(this.storeMappingData);
+            return new Map(storeMappingData);
         },
 
         // Get store ID by store code
         getStoreId(storeCode) {
-            return this.storeMappingData.get(storeCode);
+            return storeMappingData.get(storeCode);
         },
 
         // Check if store code exists
         hasStoreCode(storeCode) {
-            return this.storeMappingData.has(storeCode);
+            return storeMappingData.has(storeCode);
         },
 
         // Get mapping count
         getMappingCount() {
-            return this.storeMappingData.size;
+            return storeMappingData.size;
         },
 
         // Store switching functionality
         async switchToStore(storeCode) {
-            const storeId = this.storeMappingData.get(storeCode);
+            const storeId = storeMappingData.get(storeCode);
             if (!storeId) {
                 throw new Error(`Store code ${storeCode} not found in mappings`);
             }
@@ -168,7 +170,7 @@
 
                         resolve({
                             success: true,
-                            count: this.storeMappingData.size,
+                            count: storeMappingData.size,
                             fileName: file.name
                         });
                     } catch (error) {
@@ -186,7 +188,7 @@
 
         // Get sorted store list for dropdown
         getSortedStoreList() {
-            return Array.from(this.storeMappingData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+            return Array.from(storeMappingData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
         },
 
         // Initialize the store manager

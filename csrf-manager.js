@@ -13,23 +13,28 @@
     'use strict';
 
     // CSRF Token Management Module
+    let capturedCSRFToken = null;
+    let networkInterceptionActive = false;
+
     window.WTSCSRFManager = {
-        capturedCSRFToken: null,
-        networkInterceptionActive: false,
+        get capturedCSRFToken() { return capturedCSRFToken; },
+        set capturedCSRFToken(value) { capturedCSRFToken = value; },
+        get networkInterceptionActive() { return networkInterceptionActive; },
+        set networkInterceptionActive(value) { networkInterceptionActive = value; },
 
         // Start network interception to capture CSRF tokens
         startNetworkInterception() {
-            if (this.networkInterceptionActive) return;
+            if (networkInterceptionActive) return;
             
             console.log("🌐 Starting network request interception for CSRF token capture...");
-            this.networkInterceptionActive = true;
+            networkInterceptionActive = true;
 
             // Intercept XMLHttpRequest
             const originalXHRSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
             XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
                 if (name === 'anti-csrftoken-a2z' && value && value.length > 50) {
                     console.log("🎯 Captured CSRF token from XMLHttpRequest:", value);
-                    window.WTSCSRFManager.capturedCSRFToken = value;
+                    capturedCSRFToken = value;
                     GM_setValue('lastCapturedCSRFToken', value);
                     GM_setValue('lastCapturedTimestamp', Date.now());
                 }
@@ -52,7 +57,7 @@
                     
                     if (csrfToken && csrfToken.length > 50) {
                         console.log("🎯 Captured CSRF token from fetch request:", csrfToken);
-                        window.WTSCSRFManager.capturedCSRFToken = csrfToken;
+                        capturedCSRFToken = csrfToken;
                         GM_setValue('lastCapturedCSRFToken', csrfToken);
                         GM_setValue('lastCapturedTimestamp', Date.now());
                     }
