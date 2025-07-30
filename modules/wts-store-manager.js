@@ -223,18 +223,32 @@ class WTS_StoreManager {
     parseCSV(csvText) {
         this.core.log('Parsing CSV for store mappings...', 'debug');
         
+        // DIAGNOSTIC: Log CSV content details
+        this.core.log(`[DIAGNOSTIC] CSV parsing - Input length: ${csvText.length}`, 'debug');
+        this.core.log(`[DIAGNOSTIC] CSV parsing - First 200 chars: ${csvText.substring(0, 200)}`, 'debug');
+        
         const lines = csvText.trim().split('\n');
+        this.core.log(`[DIAGNOSTIC] CSV parsing - Found ${lines.length} lines`, 'debug');
+        
         if (lines.length < 2) {
-            throw new Error('CSV file must contain at least a header row and one data row');
+            const error = 'CSV file must contain at least a header row and one data row';
+            this.core.log(`[DIAGNOSTIC] CSV parsing failed - insufficient lines: ${error}`, 'error');
+            throw new Error(error);
         }
 
         // Parse header
         const header = lines[0].split(',').map(col => col.trim().replace(/"/g, ''));
+        this.core.log(`[DIAGNOSTIC] CSV parsing - Header columns: ${JSON.stringify(header)}`, 'debug');
+        
         const storeCodeIndex = header.findIndex(col => col.toLowerCase() === 'storecode');
         const storeIdIndex = header.findIndex(col => col.toLowerCase() === 'storeid');
+        
+        this.core.log(`[DIAGNOSTIC] CSV parsing - StoreCode index: ${storeCodeIndex}, StoreId index: ${storeIdIndex}`, 'debug');
 
         if (storeCodeIndex === -1 || storeIdIndex === -1) {
-            throw new Error('CSV must contain "StoreCode" and "StoreId" columns');
+            const error = 'CSV must contain "StoreCode" and "StoreId" columns';
+            this.core.log(`[DIAGNOSTIC] CSV parsing failed - missing required columns: ${error}`, 'error');
+            throw new Error(error);
         }
 
         const mappings = new Map();
@@ -242,40 +256,58 @@ class WTS_StoreManager {
 
         // Parse data rows
         for (let i = 1; i < lines.length; i++) {
+            this.core.log(`[DIAGNOSTIC] CSV parsing - Processing row ${i + 1}: "${lines[i]}"`, 'debug');
+            
             const row = lines[i].split(',').map(col => col.trim().replace(/"/g, ''));
+            this.core.log(`[DIAGNOSTIC] CSV parsing - Row ${i + 1} parsed to: ${JSON.stringify(row)}`, 'debug');
             
             if (row.length < Math.max(storeCodeIndex, storeIdIndex) + 1) {
-                errors.push(`Row ${i + 1}: Insufficient columns`);
+                const error = `Row ${i + 1}: Insufficient columns`;
+                this.core.log(`[DIAGNOSTIC] CSV parsing - ${error}`, 'debug');
+                errors.push(error);
                 continue;
             }
 
             const storeCode = row[storeCodeIndex];
             const storeId = row[storeIdIndex];
+            
+            this.core.log(`[DIAGNOSTIC] CSV parsing - Row ${i + 1} extracted: StoreCode="${storeCode}", StoreId="${storeId}"`, 'debug');
 
             // Validate StoreCode
             if (!this._validateStoreCode(storeCode)) {
-                errors.push(`Row ${i + 1}: StoreCode must be exactly 3 characters (got: "${storeCode}")`);
+                const error = `Row ${i + 1}: StoreCode must be exactly 3 characters (got: "${storeCode}")`;
+                this.core.log(`[DIAGNOSTIC] CSV parsing - StoreCode validation failed: ${error}`, 'debug');
+                errors.push(error);
                 continue;
             }
 
             // Validate StoreId
             if (!this._validateStoreId(storeId)) {
-                errors.push(`Row ${i + 1}: StoreId must be a valid integer (got: "${storeId}")`);
+                const error = `Row ${i + 1}: StoreId must be a valid integer (got: "${storeId}")`;
+                this.core.log(`[DIAGNOSTIC] CSV parsing - StoreId validation failed: ${error}`, 'debug');
+                errors.push(error);
                 continue;
             }
 
-            mappings.set(storeCode.toUpperCase(), parseInt(storeId, 10));
+            const parsedStoreId = parseInt(storeId, 10);
+            mappings.set(storeCode.toUpperCase(), parsedStoreId);
+            this.core.log(`[DIAGNOSTIC] CSV parsing - Successfully added mapping: ${storeCode.toUpperCase()} -> ${parsedStoreId}`, 'debug');
         }
 
         // Check for validation errors
         if (errors.length > 0) {
-            throw new Error(`Validation errors:\n${errors.join('\n')}`);
+            const errorMessage = `Validation errors:\n${errors.join('\n')}`;
+            this.core.log(`[DIAGNOSTIC] CSV parsing failed with validation errors: ${errorMessage}`, 'error');
+            throw new Error(errorMessage);
         }
 
         if (mappings.size === 0) {
-            throw new Error('No valid store mappings found in the file');
+            const error = 'No valid store mappings found in the file';
+            this.core.log(`[DIAGNOSTIC] CSV parsing failed - no valid mappings: ${error}`, 'error');
+            throw new Error(error);
         }
 
+        this.core.log(`[DIAGNOSTIC] CSV parsing completed successfully - ${mappings.size} mappings created`, 'debug');
         this.core.log(`Successfully parsed ${mappings.size} store mappings from CSV`, 'info');
         return mappings;
     }
@@ -412,24 +444,46 @@ class WTS_StoreManager {
      */
     async handleFileUpload(file) {
         try {
+            // DIAGNOSTIC: Log initial state
+            this.core.log(`[DIAGNOSTIC] handleFileUpload called with file: ${file ? file.name : 'null'}`, 'debug');
+            
             if (!file) {
-                throw new Error('No file provided');
+                const error = 'No file provided';
+                this.core.log(`[DIAGNOSTIC] File validation failed: ${error}`, 'error');
+                throw new Error(error);
             }
+
+            // DIAGNOSTIC: Log file details
+            this.core.log(`[DIAGNOSTIC] File details - Name: ${file.name}, Size: ${file.size}, Type: ${file.type}`, 'debug');
 
             // Validate file type
             const fileName = file.name.toLowerCase();
             if (!fileName.endsWith('.csv')) {
-                throw new Error('Please select a CSV file (.csv extension required)');
+                const error = 'Please select a CSV file (.csv extension required)';
+                this.core.log(`[DIAGNOSTIC] File type validation failed: ${error}`, 'error');
+                throw new Error(error);
             }
 
             this.core.log(`Processing uploaded file: ${file.name}`, 'info');
             this.core.emit('store:file-upload-started', { fileName: file.name });
 
+            // DIAGNOSTIC: Log before file reading
+            this.core.log(`[DIAGNOSTIC] Starting file content reading...`, 'debug');
+
             // Read file content
             const csvText = await this._readFileContent(file);
             
+            // DIAGNOSTIC: Log file content details
+            this.core.log(`[DIAGNOSTIC] File content read successfully. Length: ${csvText.length}, First 100 chars: ${csvText.substring(0, 100)}`, 'debug');
+            
+            // DIAGNOSTIC: Log before CSV parsing
+            this.core.log(`[DIAGNOSTIC] Starting CSV parsing...`, 'debug');
+            
             // Parse CSV and get new mappings
             const newMappings = this.parseCSV(csvText);
+            
+            // DIAGNOSTIC: Log parsing results
+            this.core.log(`[DIAGNOSTIC] CSV parsing completed. Found ${newMappings.size} mappings`, 'debug');
             
             // Update the store mapping data
             this.storeMappingData.clear();
@@ -437,23 +491,35 @@ class WTS_StoreManager {
                 this.storeMappingData.set(storeCode, storeId);
             });
 
+            // DIAGNOSTIC: Log before saving
+            this.core.log(`[DIAGNOSTIC] Starting storage save operation...`, 'debug');
+
             // Save to persistent storage
-            await this.saveStoredMappings();
+            const saveResult = await this.saveStoredMappings();
+            
+            // DIAGNOSTIC: Log save results
+            this.core.log(`[DIAGNOSTIC] Storage save completed. Result: ${saveResult}`, 'debug');
 
             this.core.log(`Successfully loaded ${this.storeMappingData.size} store mappings from ${file.name}`, 'info');
-            this.core.emit('store:file-upload-completed', { 
+            this.core.emit('store:file-upload-completed', {
                 fileName: file.name,
                 mappingCount: this.storeMappingData.size,
-                success: true 
+                success: true
             });
             
             return true;
             
         } catch (error) {
+            // DIAGNOSTIC: Enhanced error logging
+            this.core.log(`[DIAGNOSTIC] File upload error caught: ${error.name}: ${error.message}`, 'error');
+            this.core.log(`[DIAGNOSTIC] Error stack: ${error.stack}`, 'error');
+            
             this.core.log(`File upload failed: ${error.message}`, 'error');
-            this.core.emit('store:file-upload-failed', { 
+            this.core.emit('store:file-upload-failed', {
                 fileName: file?.name || 'unknown',
-                error: error.message 
+                error: error.message,
+                errorType: error.name,
+                errorStack: error.stack
             });
             return false;
         }
@@ -467,16 +533,31 @@ class WTS_StoreManager {
      */
     _readFileContent(file) {
         return new Promise((resolve, reject) => {
+            this.core.log(`[DIAGNOSTIC] _readFileContent - Starting to read file: ${file.name}`, 'debug');
+            
             const reader = new FileReader();
             
             reader.onload = function(e) {
-                resolve(e.target.result);
-            };
+                const content = e.target.result;
+                this.core.log(`[DIAGNOSTIC] _readFileContent - File read successfully. Content length: ${content.length}`, 'debug');
+                this.core.log(`[DIAGNOSTIC] _readFileContent - Content preview: ${content.substring(0, 50)}...`, 'debug');
+                resolve(content);
+            }.bind(this);
             
             reader.onerror = function(e) {
-                reject(new Error('Failed to read file'));
-            };
+                const error = new Error(`Failed to read file: ${e.target.error?.message || 'Unknown FileReader error'}`);
+                this.core.log(`[DIAGNOSTIC] _readFileContent - FileReader error: ${error.message}`, 'error');
+                this.core.log(`[DIAGNOSTIC] _readFileContent - FileReader error details: ${JSON.stringify(e.target.error)}`, 'error');
+                reject(error);
+            }.bind(this);
             
+            reader.onabort = function(e) {
+                const error = new Error('File reading was aborted');
+                this.core.log(`[DIAGNOSTIC] _readFileContent - FileReader aborted: ${error.message}`, 'error');
+                reject(error);
+            }.bind(this);
+            
+            this.core.log(`[DIAGNOSTIC] _readFileContent - Starting FileReader.readAsText()`, 'debug');
             reader.readAsText(file);
         });
     }

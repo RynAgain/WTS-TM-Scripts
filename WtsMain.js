@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.004
+// @version      2.0.005
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
