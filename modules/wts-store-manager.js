@@ -613,6 +613,102 @@ class WTS_StoreManager {
             return false;
         }
     }
+
+    // ==================== UI MANAGER COMPATIBILITY METHODS ====================
+
+    /**
+     * Upload store mappings from CSV file (UI Manager compatibility wrapper)
+     * @param {File} file - The CSV file to upload
+     * @returns {Promise<Object>} Result object with success status and details
+     */
+    async uploadStoreMappings(file) {
+        try {
+            this.core.log(`[DIAGNOSTIC] uploadStoreMappings called with file: ${file ? file.name : 'null'}`, 'debug');
+            
+            const success = await this.handleFileUpload(file);
+            
+            if (success) {
+                return {
+                    success: true,
+                    count: this.storeMappingData.size,
+                    message: `Successfully loaded ${this.storeMappingData.size} store mappings`
+                };
+            } else {
+                return {
+                    success: false,
+                    error: 'File upload failed - check console for details',
+                    count: 0
+                };
+            }
+        } catch (error) {
+            this.core.log(`[DIAGNOSTIC] uploadStoreMappings error: ${error.message}`, 'error');
+            return {
+                success: false,
+                error: error.message,
+                count: 0
+            };
+        }
+    }
+
+    /**
+     * Switch to a store (UI Manager compatibility wrapper)
+     * @param {string} storeCode - The store code to switch to
+     * @returns {Promise<Object>} Result object with success status
+     */
+    async switchStore(storeCode) {
+        try {
+            this.core.log(`[DIAGNOSTIC] switchStore called with storeCode: ${storeCode}`, 'debug');
+            
+            const success = await this.switchToStore(storeCode);
+            
+            return {
+                success: success,
+                storeCode: storeCode,
+                message: success ? `Successfully switched to store ${storeCode}` : `Failed to switch to store ${storeCode}`
+            };
+        } catch (error) {
+            this.core.log(`[DIAGNOSTIC] switchStore error: ${error.message}`, 'error');
+            return {
+                success: false,
+                storeCode: storeCode,
+                error: error.message
+            };
+        }
+    }
+
+    /**
+     * Get the count of store mappings (UI Manager compatibility method)
+     * @returns {Promise<number>} Number of store mappings
+     */
+    async getMappingCount() {
+        this.core.log(`[DIAGNOSTIC] getMappingCount called, returning: ${this.storeMappingData.size}`, 'debug');
+        return this.storeMappingData.size;
+    }
+
+    /**
+     * Get available stores (UI Manager compatibility method)
+     * @returns {Promise<Array>} Array of store objects with code and id
+     */
+    async getAvailableStores() {
+        try {
+            this.core.log(`[DIAGNOSTIC] getAvailableStores called`, 'debug');
+            
+            const stores = [];
+            for (const [storeCode, storeId] of this.storeMappingData) {
+                stores.push({
+                    code: storeCode,
+                    id: storeId,
+                    name: `Store ${storeCode}` // Basic name, could be enhanced later
+                });
+            }
+            
+            this.core.log(`[DIAGNOSTIC] getAvailableStores returning ${stores.length} stores`, 'debug');
+            return stores;
+        } catch (error) {
+            this.core.log(`[DIAGNOSTIC] getAvailableStores error: ${error.message}`, 'error');
+            return [];
+        }
+    }
 }
 
 // Export for use in other modules
