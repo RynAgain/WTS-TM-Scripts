@@ -1,577 +1,126 @@
 // ==UserScript==
-// @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
+// @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      2.0.009
-// @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
+// @version      1.2.001
+// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
 // @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
-
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-core.js
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-csrf-manager.js
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-data-extractor.js
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-export-manager.js
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-store-manager.js
-// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/modules/wts-ui-manager.js
 // @match        *://*.wholefoodsmarket.com/*
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/csrf-manager.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/data-extractor.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/store-manager.js
+// @require      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/ui-components.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // ==/UserScript==
 
-/**
- * WTS Main Orchestrator - Version 2.0.0
- * 
- * This is the lightweight main script that orchestrates all WTS modules.
- * It has been completely refactored from a 1000+ line monolithic script
- * into a clean, modular architecture.
- * 
- * The orchestrator's responsibilities:
- * 1. Initialize the WTS Core system
- * 2. Wait for all required modules to be available
- * 3. Start CSRF token interception immediately
- * 4. Initialize and coordinate all modules
- * 5. Handle graceful error recovery
- * 
- * All the original functionality is preserved but now distributed
- * across specialized modules for better maintainability.
- */
-
 (function() {
     'use strict';
-    
-    // Application state
-    let wtsCore = null;
-    let initializationAttempts = 0;
-    const MAX_INIT_ATTEMPTS = 5;
-    const INIT_RETRY_DELAY = 1000; // 1 second
-    
-    /**
-     * Log messages with consistent formatting
-     */
-    function log(message, level = 'info') {
-        const timestamp = new Date().toISOString();
-        const prefix = `[WTS-Main-${level.toUpperCase()}] ${timestamp}:`;
-        
-        switch (level) {
-            case 'error':
-                console.error(prefix, message);
-                break;
-            case 'warn':
-                console.warn(prefix, message);
-                break;
-            case 'debug':
-                console.debug(prefix, message);
-                break;
-            default:
-                console.log(prefix, message);
-        }
-    }
-    
-    /**
-     * Check if all required modules are available
-     */
-    /**
-     * Check if all required modules are available with robust validation
-     * Waits for actual module objects, not just their existence
-     */
-    async function checkModuleAvailability(maxWaitTime = 10000) {
-        const requiredModules = [
-            { name: 'WTS_Core', expectedType: 'function' },
-            { name: 'WTS_CSRFManager', expectedType: 'function' },
-            { name: 'WTS_DataExtractor', expectedType: 'function' },
-            { name: 'WTS_ExportManager', expectedType: 'function' },
-            { name: 'WTS_StoreManager', expectedType: 'function' },
-            { name: 'WTS_UIManager', expectedType: 'function' }
-        ];
-        
-        const startTime = Date.now();
-        let allModulesReady = false;
-        
-        while (!allModulesReady && (Date.now() - startTime) < maxWaitTime) {
-            const availableModules = [];
-            const missingModules = [];
-            const invalidModules = [];
-            
-            for (const moduleInfo of requiredModules) {
-                const moduleName = moduleInfo.name;
-                const expectedType = moduleInfo.expectedType;
-                const actualModule = window[moduleName];
-                
-                if (typeof actualModule === 'undefined') {
-                    missingModules.push(moduleName);
-                } else if (typeof actualModule !== expectedType) {
-                    invalidModules.push(`${moduleName} (expected ${expectedType}, got ${typeof actualModule})`);
-                } else {
-                    // Additional validation for functions (classes)
-                    if (expectedType === 'function') {
-                        try {
-                            // Check if it looks like a class constructor
-                            const hasPrototype = actualModule.prototype && typeof actualModule.prototype === 'object';
-                            if (hasPrototype) {
-                                availableModules.push(moduleName);
-                            } else {
-                                invalidModules.push(`${moduleName} (not a valid class constructor)`);
-                            }
-                        } catch (error) {
-                            invalidModules.push(`${moduleName} (validation error: ${error.message})`);
-                        }
-                    } else {
-                        availableModules.push(moduleName);
-                    }
-                }
-            }
-            
-            const totalIssues = missingModules.length + invalidModules.length;
-            log(`Module availability: ${availableModules.length}/${requiredModules.length} ready, ${totalIssues} issues`);
-            
-            if (totalIssues === 0) {
-                allModulesReady = true;
-                log('All required modules are available and valid ✅');
-                return true;
-            } else {
-                if (missingModules.length > 0) {
-                    log(`Missing modules: ${missingModules.join(', ')}`, 'warn');
-                }
-                if (invalidModules.length > 0) {
-                    log(`Invalid modules: ${invalidModules.join(', ')}`, 'warn');
-                }
-                // Wait a bit before checking again
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-        }
-        
-        log(`Module loading timeout after ${maxWaitTime}ms. Modules failed to load properly.`, 'error');
-        return false;
-    }
-    
-    /**
-     * Initialize the WTS Core system
-     */
-    async function initializeCore() {
-        try {
-            log('Initializing WTS Core system...');
-            
-            // Both WTS_Core and WTSCore should now be the same class (not instance)
-            let CoreClass = null;
-            if (typeof window.WTS_Core === 'function') {
-                CoreClass = window.WTS_Core;
-                log('Using WTS_Core class for initialization', 'info');
-            } else if (typeof window.WTSCore === 'function') {
-                CoreClass = window.WTSCore;
-                log('Using WTSCore class for initialization', 'info');
-            } else {
-                throw new Error('WTS_Core class is not available - modules may not have loaded properly');
-            }
-            
-            // Create core instance
-            wtsCore = new CoreClass();
-            log('WTS Core instance created successfully', 'info');
-            
-            // Initialize core
-            if (typeof wtsCore.initialize === 'function') {
-                const coreInitialized = await wtsCore.initialize();
-                if (!coreInitialized) {
-                    throw new Error('Failed to initialize WTS Core');
-                }
-                log('WTS Core initialized successfully ✅');
-            } else {
-                log('WTS Core does not have initialize method, assuming ready', 'info');
-            }
-            
-            return true;
-            
-        } catch (error) {
-            log(`Core initialization failed: ${error.message}`, 'error');
-            return false;
-        }
-    }
-    
-    /**
-     * Initialize all modules directly (bypassing core registration for now)
-     */
-    async function initializeModules() {
-        try {
-            log('Initializing modules directly...');
-            
-            // Store module instances on the core for easy access
-            wtsCore.moduleInstances = {};
-            
-            // Module initialization order is important
-            const moduleInitOrder = [
-                {
-                    name: 'WTS_CSRFManager',
-                    class: window.WTS_CSRFManager,
-                    description: 'CSRF token management'
-                },
-                {
-                    name: 'WTS_DataExtractor',
-                    class: window.WTS_DataExtractor,
-                    description: 'ASIN data extraction'
-                },
-                {
-                    name: 'WTS_ExportManager',
-                    class: window.WTS_ExportManager,
-                    description: 'CSV export functionality'
-                },
-                {
-                    name: 'WTS_StoreManager',
-                    class: window.WTS_StoreManager,
-                    description: 'Store switching and mapping'
-                },
-                {
-                    name: 'WTS_UIManager',
-                    class: window.WTS_UIManager,
-                    description: 'User interface orchestration'
-                }
-            ];
-            
-            // Initialize each module
-            for (const moduleInfo of moduleInitOrder) {
-                try {
-                    log(`Initializing ${moduleInfo.name} (${moduleInfo.description})...`);
-                    
-                    // Create module instance with proper dependencies
-                    let moduleInstance;
-                    
-                    // Handle modules that require specific dependencies
-                    if (moduleInfo.name === 'WTS_StoreManager') {
-                        // StoreManager needs CSRFManager instance
-                        const csrfManager = wtsCore.moduleInstances['WTS_CSRFManager'];
-                        if (!csrfManager) {
-                            throw new Error('WTS_StoreManager requires WTS_CSRFManager to be initialized first');
-                        }
-                        moduleInstance = new moduleInfo.class(wtsCore, csrfManager);
-                    } else {
-                        // Standard initialization with just core
-                        moduleInstance = new moduleInfo.class(wtsCore);
-                    }
-                    
-                    // Store instance for later access in both places for compatibility
-                    wtsCore.moduleInstances[moduleInfo.name] = moduleInstance;
-                    
-                    // Also register with the core's module system so getModule() works
-                    if (typeof wtsCore.registerModule === 'function') {
-                        log(`Attempting to register ${moduleInfo.name} with core...`, 'debug');
-                        const registered = wtsCore.registerModule(moduleInfo.name, moduleInstance);
-                        if (registered) {
-                            log(`✅ ${moduleInfo.name} registered successfully with core`, 'debug');
-                        } else {
-                            log(`❌ Failed to register ${moduleInfo.name} with core, using fallback`, 'warn');
-                            // Fallback: directly add to modules Map
-                            if (wtsCore.modules && typeof wtsCore.modules.set === 'function') {
-                                wtsCore.modules.set(moduleInfo.name, moduleInstance);
-                                log(`✅ ${moduleInfo.name} added to core modules Map directly`, 'debug');
-                            } else {
-                                log(`❌ Core modules Map not available for ${moduleInfo.name}`, 'error');
-                            }
-                        }
-                    } else {
-                        log(`Core registerModule method not available, using direct Map access`, 'warn');
-                        // Fallback: directly add to modules Map
-                        if (wtsCore.modules && typeof wtsCore.modules.set === 'function') {
-                            wtsCore.modules.set(moduleInfo.name, moduleInstance);
-                            log(`✅ ${moduleInfo.name} added to core modules Map directly`, 'debug');
-                        } else {
-                            log(`❌ Core modules Map not available for ${moduleInfo.name}`, 'error');
-                        }
-                    }
-                    
-                    // Initialize module
-                    if (typeof moduleInstance.initialize === 'function') {
-                        const initialized = await moduleInstance.initialize();
-                        if (!initialized) {
-                            throw new Error(`Failed to initialize ${moduleInfo.name}`);
-                        }
-                    }
-                    
-                    log(`${moduleInfo.name} initialized successfully ✅`);
-                    
-                } catch (error) {
-                    log(`Failed to initialize ${moduleInfo.name}: ${error.message}`, 'error');
-                    throw error;
-                }
-            }
-            
-            log('All modules initialized successfully ✅');
-            return true;
-            
-        } catch (error) {
-            log(`Module initialization failed: ${error.message}`, 'error');
-            return false;
-        }
-    }
-    
-    /**
-     * Start the application services
-     */
-    async function startApplication() {
-        try {
-            log('Starting WTS application services...');
-            
-            // Get module instances
-            const csrfManager = wtsCore.moduleInstances['WTS_CSRFManager'];
-            const dataExtractor = wtsCore.moduleInstances['WTS_DataExtractor'];
-            const uiManager = wtsCore.moduleInstances['WTS_UIManager'];
-            
-            // CSRF Manager should already be intercepting (started in initialize)
-            log('CSRF token interception already active ✅');
-            
-            // Start data monitoring if available
-            if (dataExtractor && typeof dataExtractor.startMonitoring === 'function') {
-                log('Starting ASIN data monitoring...');
-                await dataExtractor.startMonitoring();
-            }
-            
-            // Create and show the UI panel
-            if (uiManager && typeof uiManager.createPanel === 'function') {
-                log('Creating user interface...');
-                await uiManager.createPanel();
-            }
-            
-            // Start real-time updates if available
-            if (uiManager && typeof uiManager.startRealTimeUpdates === 'function') {
-                log('Starting real-time updates...');
-                await uiManager.startRealTimeUpdates();
-            }
-            
-            log('WTS application started successfully ✅');
-            log('🎉 WTS v2.0.0 is now running with modular architecture!');
-            
-            return true;
-            
-        } catch (error) {
-            log(`Application startup failed: ${error.message}`, 'error');
-            return false;
-        }
-    }
-    
-    /**
-     * Handle initialization errors with retry logic
-     */
-    async function handleInitializationError(error) {
-        initializationAttempts++;
-        
-        log(`❌ Initialization attempt ${initializationAttempts} failed: ${error.message}`, 'error');
-        log(`Error stack: ${error.stack}`, 'error');
-        
-        // Provide detailed diagnostic information
-        const diagnostics = await gatherDiagnosticInfo();
-        log('Diagnostic information:', 'info');
-        log(`- DOM Ready: ${diagnostics.domReady}`, 'info');
-        log(`- Available modules: ${diagnostics.availableModules.join(', ') || 'none'}`, 'info');
-        log(`- Missing modules: ${diagnostics.missingModules.join(', ') || 'none'}`, 'info');
-        log(`- WTS_Core available: ${diagnostics.coreAvailable}`, 'info');
-        log(`- WTSCore available: ${diagnostics.altCoreAvailable}`, 'info');
-        
-        if (initializationAttempts < MAX_INIT_ATTEMPTS) {
-            const retryDelay = INIT_RETRY_DELAY * initializationAttempts; // Exponential backoff
-            log(`🔄 Retrying initialization in ${retryDelay}ms... (attempt ${initializationAttempts + 1}/${MAX_INIT_ATTEMPTS})`, 'warn');
-            
-            setTimeout(() => {
-                initializeApplication();
-            }, retryDelay);
-        } else {
-            log('💥 Maximum initialization attempts reached. WTS startup failed.', 'error');
-            
-            // Show detailed error information to user
-            const errorDetails = `
-WTS Initialization Failed
 
-Attempt: ${initializationAttempts}/${MAX_INIT_ATTEMPTS}
-Error: ${error.message}
+    // Main WTS Script Entry Point
+    console.log('🚀 WTS Main Script Loading...');
 
-Diagnostics:
-• DOM Ready: ${diagnostics.domReady}
-• Available Modules: ${diagnostics.availableModules.length}/${diagnostics.totalModules}
-• Core Available: ${diagnostics.coreAvailable || diagnostics.altCoreAvailable}
+    // Verify all required modules are loaded
+    const requiredModules = [
+        'WTSCSRFManager',
+        'WTSDataExtractor', 
+        'WTSStoreManager',
+        'WTSUIComponents'
+    ];
 
-This may be due to:
-• Network connectivity issues loading remote modules
-• Browser security restrictions
-• Module loading race conditions
-• Corrupted or missing module files
-
-Check the browser console for detailed logs.
-            `.trim();
-            
-            if (typeof alert !== 'undefined') {
-                alert(errorDetails);
-            }
-            
-            // Activate emergency fallback
-            emergencyFallback();
-        }
-    }
+    const missingModules = requiredModules.filter(module => !window[module]);
     
-    /**
-     * Gather diagnostic information for troubleshooting
-     */
-    async function gatherDiagnosticInfo() {
-        const requiredModuleNames = [
-            'WTS_Core', 'WTS_CSRFManager', 'WTS_DataExtractor',
-            'WTS_ExportManager', 'WTS_StoreManager', 'WTS_UIManager'
-        ];
-        
-        const availableModules = [];
-        const missingModules = [];
-        
-        for (const moduleName of requiredModuleNames) {
-            if (typeof window[moduleName] !== 'undefined') {
-                availableModules.push(moduleName);
-            } else {
-                missingModules.push(moduleName);
-            }
-        }
-        
-        return {
-            domReady: document.readyState === 'complete',
-            availableModules,
-            missingModules,
-            totalModules: requiredModuleNames.length,
-            coreAvailable: typeof window.WTS_Core !== 'undefined',
-            altCoreAvailable: typeof window.WTSCore !== 'undefined',
-            timestamp: new Date().toISOString()
-        };
+    if (missingModules.length > 0) {
+        console.error('❌ Missing required modules:', missingModules);
+        alert(`❌ WTS Script Error: Missing modules: ${missingModules.join(', ')}\n\nPlease ensure all script files are properly loaded.`);
+        return;
     }
-    
-    /**
-     * Main initialization function
-     */
-    async function initializeApplication() {
+
+    console.log('✅ All required modules loaded successfully');
+
+    // Initialize all modules in the correct order
+    function initializeModules() {
         try {
-            log('🚀 Starting WTS v2.0.0 initialization...');
-            
-            // Step 1: Wait for modules to be available with timeout
-            log('Step 1: Checking module availability...');
-            const modulesAvailable = await checkModuleAvailability(15000); // 15 second timeout
-            if (!modulesAvailable) {
-                throw new Error('Required modules are not available after timeout');
-            }
-            
-            // Step 2: Initialize core system
-            log('Step 2: Initializing core system...');
-            const coreReady = await initializeCore();
-            if (!coreReady) {
-                throw new Error('Core initialization failed');
-            }
-            
-            // Step 3: Initialize all modules
-            log('Step 3: Initializing modules...');
-            const modulesReady = await initializeModules();
-            if (!modulesReady) {
-                throw new Error('Module initialization failed');
-            }
-            
-            // Step 4: Start application services
-            log('Step 4: Starting application services...');
-            const appStarted = await startApplication();
-            if (!appStarted) {
-                throw new Error('Application startup failed');
-            }
-            
-            log('🎉 WTS initialization completed successfully!');
-            
-            // Clear the emergency fallback timer since we succeeded
-            if (typeof fallbackTimer !== 'undefined') {
-                clearTimeout(fallbackTimer);
-                log('Emergency fallback timer cleared', 'info');
-            }
-            
+            // 1. Initialize CSRF Manager first (starts network interception)
+            console.log('🔧 Initializing CSRF Manager...');
+            window.WTSCSRFManager.init();
+
+            // 2. Initialize Data Extractor
+            console.log('🔧 Initializing Data Extractor...');
+            // Data extractor is stateless, no init needed
+
+            // 3. Initialize Store Manager (loads stored mappings)
+            console.log('🔧 Initializing Store Manager...');
+            window.WTSStoreManager.init();
+
+            // 4. Initialize UI Components (creates the control panel)
+            console.log('🔧 Initializing UI Components...');
+            window.WTSUIComponents.init();
+
+            console.log('✅ All modules initialized successfully');
+
         } catch (error) {
-            await handleInitializationError(error);
+            console.error('❌ Error during module initialization:', error);
+            alert(`❌ WTS Script Error: Failed to initialize modules\n\n${error.message}`);
         }
     }
-    
-    /**
-     * Wait for DOM to be ready, then initialize
-     * Uses window.onload instead of DOMContentLoaded for better reliability
-     */
-    function waitForDOMAndInitialize() {
-        if (document.readyState === 'complete') {
-            log('DOM is fully loaded, starting initialization immediately...');
-            initializeApplication();
-        } else if (document.readyState === 'interactive') {
-            log('DOM is interactive, starting initialization...');
-            initializeApplication();
-        } else {
-            log('Waiting for DOM to be ready...');
-            // Use window.onload instead of DOMContentLoaded for better reliability
-            // This ensures all resources are loaded, reducing race conditions
-            window.addEventListener('load', initializeApplication);
-            
-            // Fallback: also listen for DOMContentLoaded in case window.onload takes too long
-            document.addEventListener('DOMContentLoaded', () => {
-                log('DOM content loaded, will initialize if not already started...');
-                // Add a small delay to let any remaining scripts finish
-                setTimeout(() => {
-                    if (!wtsCore) {
-                        log('Fallback initialization triggered by DOMContentLoaded');
-                        initializeApplication();
-                    }
-                }, 1000);
-            });
-        }
+
+    // Wait for page to be ready before initializing
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeModules);
+    } else {
+        // DOM is already ready
+        initializeModules();
     }
-    
-    /**
-     * Emergency fallback - if modules fail to load, provide basic functionality
-     */
-    function emergencyFallback() {
-        log('Activating emergency fallback mode...', 'warn');
+
+    // Additional initialization when window loads (for UI components that need full page load)
+    window.addEventListener('load', () => {
+        console.log('🎯 Page fully loaded, performing final setup...');
         
-        // Create a minimal UI to inform the user
-        const fallbackPanel = document.createElement('div');
-        fallbackPanel.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #ff6b6b;
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: sans-serif;
-            font-size: 14px;
-            z-index: 10000;
-            max-width: 300px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        `;
-        
-        fallbackPanel.innerHTML = `
-            <strong>⚠️ WTS Module Loading Failed</strong><br>
-            <small>The modular WTS system could not initialize properly. 
-            Please refresh the page or check your userscript manager.</small>
-        `;
-        
-        document.body.appendChild(fallbackPanel);
-        
-        // Auto-remove after 10 seconds
-        setTimeout(() => {
-            if (fallbackPanel.parentNode) {
-                fallbackPanel.parentNode.removeChild(fallbackPanel);
+        // Ensure UI is properly initialized
+        if (window.WTSUIComponents && typeof window.WTSUIComponents.addCardCounter === 'function') {
+            // Card counter is already added in init, but we can refresh the store UI
+            if (typeof window.WTSUIComponents.updateStoreUI === 'function') {
+                window.WTSUIComponents.updateStoreUI();
             }
-        }, 10000);
-    }
-    
-    // Set up emergency fallback timer
-    const fallbackTimer = setTimeout(emergencyFallback, 10000); // 10 seconds
-    
-    // Start the application
-    log('WTS Main Orchestrator v2.0.0 loaded');
-    waitForDOMAndInitialize();
-    
-    // Clear fallback timer if initialization succeeds
-    const originalLog = log;
-    log = function(message, level) {
-        originalLog(message, level);
-        
-        // If we see the success message, clear the fallback timer
-        if (message.includes('initialization completed successfully')) {
-            clearTimeout(fallbackTimer);
         }
+
+        console.log('🎉 WTS Script fully initialized and ready!');
+    });
+
+    // Global error handler for the script
+    window.addEventListener('error', (event) => {
+        if (event.filename && event.filename.includes('WTS')) {
+            console.error('❌ WTS Script Error:', event.error);
+        }
+    });
+
+    // Expose a global status check function for debugging
+    window.WTSStatus = function() {
+        console.log('=== WTS Script Status ===');
+        console.log('CSRF Manager:', window.WTSCSRFManager ? '✅ Loaded' : '❌ Missing');
+        console.log('Data Extractor:', window.WTSDataExtractor ? '✅ Loaded' : '❌ Missing');
+        console.log('Store Manager:', window.WTSStoreManager ? '✅ Loaded' : '❌ Missing');
+        console.log('UI Components:', window.WTSUIComponents ? '✅ Loaded' : '❌ Missing');
+        
+        if (window.WTSStoreManager) {
+            console.log('Store Mappings:', window.WTSStoreManager.getMappingCount());
+        }
+        
+        if (window.WTSDataExtractor) {
+            const cardData = window.WTSDataExtractor.getCurrentCardCount();
+            console.log('Visible ASINs:', cardData.visibleCount);
+            console.log('Empty Cards:', cardData.emptyCount);
+        }
+        
+        console.log('========================');
     };
-    
+
+    console.log('💡 Type WTSStatus() in console to check script status');
+
 })();
