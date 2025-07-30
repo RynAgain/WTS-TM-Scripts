@@ -889,10 +889,27 @@ class WTS_UIManager {
      * @private
      */
     async _getModuleReferences() {
+        this.core.log('[DIAGNOSTIC] UI Manager getting module references...', 'debug');
+        
         this.modules.dataExtractor = this.core.getModule('WTS_DataExtractor');
+        this.core.log(`[DIAGNOSTIC] DataExtractor: ${this.modules.dataExtractor ? 'FOUND' : 'NOT FOUND'}`, 'debug');
+        
         this.modules.exportManager = this.core.getModule('WTS_ExportManager');
+        this.core.log(`[DIAGNOSTIC] ExportManager: ${this.modules.exportManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
+        
         this.modules.storeManager = this.core.getModule('WTS_StoreManager');
+        this.core.log(`[DIAGNOSTIC] StoreManager: ${this.modules.storeManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
+        
         this.modules.csrfManager = this.core.getModule('WTS_CSRFManager');
+        this.core.log(`[DIAGNOSTIC] CSRFManager: ${this.modules.csrfManager ? 'FOUND' : 'NOT FOUND'}`, 'debug');
+        
+        // Also check what modules are actually registered in core
+        if (this.core.modules && typeof this.core.modules.keys === 'function') {
+            const registeredModules = Array.from(this.core.modules.keys());
+            this.core.log(`[DIAGNOSTIC] Modules registered in core: ${registeredModules.join(', ')}`, 'debug');
+        } else {
+            this.core.log('[DIAGNOSTIC] Core modules Map not accessible', 'error');
+        }
     }
 
     /**

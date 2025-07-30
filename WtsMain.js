@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping (Modular)
 // @namespace    http://tampermonkey.net/
-// @version      2.0.007
+// @version      2.0.008
 // @description  Modular ASIN exporter with store mapping - lightweight orchestrator using WTS module system
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -267,10 +267,29 @@
                     
                     // Also register with the core's module system so getModule() works
                     if (typeof wtsCore.registerModule === 'function') {
-                        wtsCore.registerModule(moduleInfo.name, moduleInstance);
+                        log(`Attempting to register ${moduleInfo.name} with core...`, 'debug');
+                        const registered = wtsCore.registerModule(moduleInfo.name, moduleInstance);
+                        if (registered) {
+                            log(`✅ ${moduleInfo.name} registered successfully with core`, 'debug');
+                        } else {
+                            log(`❌ Failed to register ${moduleInfo.name} with core, using fallback`, 'warn');
+                            // Fallback: directly add to modules Map
+                            if (wtsCore.modules && typeof wtsCore.modules.set === 'function') {
+                                wtsCore.modules.set(moduleInfo.name, moduleInstance);
+                                log(`✅ ${moduleInfo.name} added to core modules Map directly`, 'debug');
+                            } else {
+                                log(`❌ Core modules Map not available for ${moduleInfo.name}`, 'error');
+                            }
+                        }
                     } else {
+                        log(`Core registerModule method not available, using direct Map access`, 'warn');
                         // Fallback: directly add to modules Map
-                        wtsCore.modules.set(moduleInfo.name, moduleInstance);
+                        if (wtsCore.modules && typeof wtsCore.modules.set === 'function') {
+                            wtsCore.modules.set(moduleInfo.name, moduleInstance);
+                            log(`✅ ${moduleInfo.name} added to core modules Map directly`, 'debug');
+                        } else {
+                            log(`❌ Core modules Map not available for ${moduleInfo.name}`, 'error');
+                        }
                     }
                     
                     // Initialize module
