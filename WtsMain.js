@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.000
+// @version      1.3.001
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -687,6 +687,9 @@
                     // Save to persistent storage
                     saveStoredMappings();
 
+                    // Update UI
+                    updateStatus();
+
                     alert(`✅ Successfully loaded ${storeMappingData.size} store mappings from ${file.name}`);
                 } catch (error) {
                     alert(`❌ Error parsing CSV file: ${error.message}`);
@@ -1030,6 +1033,14 @@
         statusDiv.style.marginTop = '4px';
         statusDiv.textContent = 'No store mappings loaded';
 
+        // Create status display for item database
+        const itemDatabaseStatusDiv = document.createElement('div');
+        itemDatabaseStatusDiv.style.fontSize = '12px';
+        itemDatabaseStatusDiv.style.color = '#666';
+        itemDatabaseStatusDiv.style.textAlign = 'center';
+        itemDatabaseStatusDiv.style.marginTop = '4px';
+        itemDatabaseStatusDiv.textContent = 'No item database loaded';
+
         // Create CSRF settings button
         const csrfSettingsBtn = document.createElement('button');
         csrfSettingsBtn.textContent = '⚙️ CSRF Settings';
@@ -1205,16 +1216,30 @@
             }
         };
 
-        // Override the handleFileUpload to update status
-        const originalHandleUpload = handleFileUpload;
-        handleFileUpload = function(file) {
-            originalHandleUpload(file);
-            // Update status after a short delay to allow for processing
-            setTimeout(updateStatus, 100);
+        // Function to update item database status and UI visibility
+        const updateItemDatabaseStatus = () => {
+            if (itemDatabase.length === 0) {
+                itemDatabaseStatusDiv.textContent = 'No item database loaded';
+                itemDatabaseStatusDiv.style.color = '#666';
+                itemSearchContainer.style.display = 'none';
+            } else {
+                const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
+                const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
+                const ageText = ageHours < 1 ? `${Math.round(ageHours * 60)}m` : `${ageHours.toFixed(1)}h`;
+                
+                itemDatabaseStatusDiv.textContent = `${itemDatabase.length} items loaded (${ageText} ago)`;
+                itemDatabaseStatusDiv.style.color = '#28a745';
+                itemSearchContainer.style.display = 'block';
+            }
         };
 
+        // Note: File upload handlers (handleCSVUpload and handleXLSXUpload)
+        // automatically update their respective status displays
+
         // Initialize status on load
+        loadItemDatabase(); // Load stored item database
         updateStatus();
+        updateItemDatabaseStatus();
 
         contentContainer.appendChild(exportBtn);
         contentContainer.appendChild(refreshBtn);
@@ -1322,11 +1347,206 @@
         asinInputContainer.appendChild(goToItemBtn);
         contentContainer.appendChild(asinInputContainer);
         
+        // Item Search Feature
+        const itemSearchContainer = document.createElement('div');
+        itemSearchContainer.style.marginTop = '8px';
+        itemSearchContainer.style.display = 'none'; // Hidden by default until database is loaded
+        
+        const itemSearchLabel = document.createElement('div');
+        itemSearchLabel.textContent = 'Search Items:';
+        itemSearchLabel.style.fontSize = '12px';
+        itemSearchLabel.style.color = '#333';
+        itemSearchLabel.style.marginBottom = '4px';
+        
+        const searchTypeSelect = document.createElement('select');
+        searchTypeSelect.style.width = '100%';
+        searchTypeSelect.style.padding = '6px';
+        searchTypeSelect.style.borderRadius = '4px';
+        searchTypeSelect.style.border = '1px solid #ccc';
+        searchTypeSelect.style.fontSize = '12px';
+        searchTypeSelect.style.marginBottom = '4px';
+        
+        const searchOptions = [
+            { value: 'all', text: 'Search All Fields' },
+            { value: 'asin', text: 'Search by ASIN' },
+            { value: 'name', text: 'Search by Item Name' },
+            { value: 'sku', text: 'Search by SKU' },
+            { value: 'store', text: 'Search by Store' }
+        ];
+        
+        searchOptions.forEach(option => {
+            const optionElement = document.createElement('option');
+            optionElement.value = option.value;
+            optionElement.textContent = option.text;
+            searchTypeSelect.appendChild(optionElement);
+        });
+        
+        const itemSearchInput = document.createElement('input');
+        itemSearchInput.type = 'text';
+        itemSearchInput.placeholder = 'Enter search term...';
+        itemSearchInput.style.width = '100%';
+        itemSearchInput.style.padding = '8px';
+        itemSearchInput.style.border = '1px solid #ccc';
+        itemSearchInput.style.borderRadius = '4px';
+        itemSearchInput.style.fontSize = '12px';
+        itemSearchInput.style.boxSizing = 'border-box';
+        itemSearchInput.style.marginBottom = '4px';
+        
+        const searchResultsContainer = document.createElement('div');
+        searchResultsContainer.style.maxHeight = '200px';
+        searchResultsContainer.style.overflowY = 'auto';
+        searchResultsContainer.style.border = '1px solid #ddd';
+        searchResultsContainer.style.borderRadius = '4px';
+        searchResultsContainer.style.backgroundColor = '#f8f9fa';
+        searchResultsContainer.style.display = 'none';
+        
+        // Search functionality
+        function performSearch() {
+            const query = itemSearchInput.value.trim();
+            const searchType = searchTypeSelect.value;
+            
+            if (!query) {
+                searchResultsContainer.style.display = 'none';
+                return;
+            }
+            
+            const results = searchItems(query, searchType);
+            displaySearchResults(results);
+        }
+        
+        function displaySearchResults(results) {
+            searchResultsContainer.innerHTML = '';
+            
+            if (results.length === 0) {
+                const noResults = document.createElement('div');
+                noResults.textContent = 'No items found';
+                noResults.style.padding = '8px';
+                noResults.style.color = '#666';
+                noResults.style.textAlign = 'center';
+                searchResultsContainer.appendChild(noResults);
+                searchResultsContainer.style.display = 'block';
+                return;
+            }
+            
+            // Limit results to first 10 for performance
+            const limitedResults = results.slice(0, 10);
+            
+            limitedResults.forEach(item => {
+                const resultItem = document.createElement('div');
+                resultItem.style.padding = '8px';
+                resultItem.style.borderBottom = '1px solid #dee2e6';
+                resultItem.style.cursor = 'pointer';
+                resultItem.style.fontSize = '11px';
+                
+                resultItem.innerHTML = `
+                    <div style="font-weight: bold; color: #007bff;">${item.item_name}</div>
+                    <div style="color: #666;">ASIN: ${item.asin} | SKU: ${item.sku}</div>
+                    <div style="color: #666;">Store: ${item.store_name} (${item.store_tlc})</div>
+                `;
+                
+                resultItem.addEventListener('mouseenter', () => {
+                    resultItem.style.backgroundColor = '#e9ecef';
+                });
+                
+                resultItem.addEventListener('mouseleave', () => {
+                    resultItem.style.backgroundColor = 'transparent';
+                });
+                
+                resultItem.addEventListener('click', () => {
+                    selectItem(item);
+                });
+                
+                searchResultsContainer.appendChild(resultItem);
+            });
+            
+            if (results.length > 10) {
+                const moreResults = document.createElement('div');
+                moreResults.textContent = `... and ${results.length - 10} more results`;
+                moreResults.style.padding = '8px';
+                moreResults.style.color = '#666';
+                moreResults.style.textAlign = 'center';
+                moreResults.style.fontStyle = 'italic';
+                searchResultsContainer.appendChild(moreResults);
+            }
+            
+            searchResultsContainer.style.display = 'block';
+        }
+        
+        function selectItem(item) {
+            // Auto-switch to store if different from current
+            const currentStoreTLC = getCurrentStoreTLC();
+            if (item.store_tlc && item.store_tlc !== currentStoreTLC && storeMappingData.has(item.store_tlc)) {
+                const switchStore = confirm(`This item is from store ${item.store_tlc}. Would you like to switch to that store first?`);
+                if (switchStore) {
+                    switchToStore(item.store_tlc).then(() => {
+                        // After store switch, navigate to item
+                        setTimeout(() => {
+                            navigateToItemWithContext(item);
+                        }, 2000); // Wait for store switch to complete
+                    });
+                    return;
+                }
+            }
+            
+            // Navigate to item directly
+            navigateToItemWithContext(item);
+        }
+        
+        function getCurrentStoreTLC() {
+            // Try to extract current store from URL or page context
+            // This is a placeholder - you might need to implement based on how store info is available
+            return null;
+        }
+        
+        function navigateToItemWithContext(item) {
+            const itemURL = `https://www.wholefoodsmarket.com/name/dp/${item.asin}`;
+            window.open(itemURL, '_blank');
+            
+            // Clear search
+            itemSearchInput.value = '';
+            searchResultsContainer.style.display = 'none';
+            
+            // Show success message with item details
+            setTimeout(() => {
+                alert(`✅ Opened ${item.item_name}\nASIN: ${item.asin}\nStore: ${item.store_name} (${item.store_tlc})`);
+            }, 500);
+        }
+        
+        // Event listeners for search
+        itemSearchInput.addEventListener('input', () => {
+            clearTimeout(itemSearchInput.searchTimeout);
+            itemSearchInput.searchTimeout = setTimeout(performSearch, 300); // Debounce search
+        });
+        
+        searchTypeSelect.addEventListener('change', performSearch);
+        
+        itemSearchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        // Click outside to close results
+        document.addEventListener('click', (e) => {
+            if (!itemSearchContainer.contains(e.target)) {
+                searchResultsContainer.style.display = 'none';
+            }
+        });
+        
+        itemSearchContainer.appendChild(itemSearchLabel);
+        itemSearchContainer.appendChild(searchTypeSelect);
+        itemSearchContainer.appendChild(itemSearchInput);
+        itemSearchContainer.appendChild(searchResultsContainer);
+        contentContainer.appendChild(itemSearchContainer);
+        
         contentContainer.appendChild(uploadBtn);
+        contentContainer.appendChild(xlsxUploadBtn);
         contentContainer.appendChild(statusDiv);
+        contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
+        contentContainer.appendChild(xlsxFileInput);
         document.body.appendChild(panel);
     }
 
