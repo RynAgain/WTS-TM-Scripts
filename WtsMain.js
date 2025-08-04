@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.2.002
-// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality
+// @version      1.3.000
+// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
@@ -13,6 +13,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // ==/UserScript==
 
 (function () {
@@ -122,6 +123,7 @@
     function createExportButton() {
         let lastExtractedData = [];
         let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
+        let itemDatabase = []; // Item database from XLSX: Array of item objects
 
         // Load stored mappings from Tampermonkey storage
         function loadStoredMappings() {
@@ -205,6 +207,181 @@
             }
 
             return mappings;
+        }
+
+        // XLSX parsing function for item database
+        function parseXLSX(arrayBuffer) {
+            try {
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                
+                // Look for the specific sheet "WFMOAC Inventory Data"
+                const targetSheetName = "WFMOAC Inventory Data";
+                let sheetName = targetSheetName;
+                
+                if (!workbook.SheetNames.includes(targetSheetName)) {
+                    console.warn(`Sheet "${targetSheetName}" not found. Available sheets:`, workbook.SheetNames);
+                    // Fallback to first sheet if target sheet not found
+                    sheetName = workbook.SheetNames[0];
+                    if (!sheetName) {
+                        throw new Error('No sheets found in XLSX file');
+                    }
+                }
+                
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                if (jsonData.length < 2) {
+                    throw new Error('XLSX file must contain at least a header row and one data row');
+                }
+                
+                const headers = jsonData[0].map(h => h ? h.toString().trim() : '');
+                const requiredColumns = ['store_name', 'store_acronym', 'store_tlc', 'item_name', 'sku', 'asin'];
+                const columnIndices = {};
+                
+                // Map column headers to indices (case insensitive)
+                requiredColumns.forEach(col => {
+                    const index = headers.findIndex(h => h.toLowerCase() === col.toLowerCase());
+                    if (index === -1) {
+                        throw new Error(`Required column "${col}" not found in XLSX file`);
+                    }
+                    columnIndices[col] = index;
+                });
+                
+                // Optional columns
+                const optionalColumns = ['quantity', 'listing_status', 'event_date', 'sku_wo_chck_dgt', 'rnk', 'eod_our_price', 'offering_start_datetime', 'offering_end_datetime', 'merchant_customer_id', 'encrypted_merchant_i'];
+                optionalColumns.forEach(col => {
+                    const index = headers.findIndex(h => h.toLowerCase() === col.toLowerCase());
+                    if (index !== -1) {
+                        columnIndices[col] = index;
+                    }
+                });
+                
+                const items = [];
+                const errors = [];
+                
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
+                    
+                    if (!row || row.length === 0) continue; // Skip empty rows
+                    
+                    const item = {};
+                    let hasError = false;
+                    
+                    // Process required columns
+                    requiredColumns.forEach(col => {
+                        const value = row[columnIndices[col]];
+                        if (value === undefined || value === null || value === '') {
+                            errors.push(`Row ${i + 1}: Missing required value for "${col}"`);
+                            hasError = true;
+                            return;
+                        }
+                        item[col] = value.toString().trim();
+                    });
+                    
+                    if (hasError) continue;
+                    
+                    // Validate ASIN format
+                    if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
+                        errors.push(`Row ${i + 1}: Invalid ASIN format "${item.asin}" (must be 10 alphanumeric characters)`);
+                        continue;
+                    }
+                    
+                    // Validate store_tlc format
+                    if (item.store_tlc && item.store_tlc.length !== 3) {
+                        errors.push(`Row ${i + 1}: Invalid store_tlc format "${item.store_tlc}" (must be 3 characters)`);
+                        continue;
+                    }
+                    
+                    // Process optional columns
+                    optionalColumns.forEach(col => {
+                        if (columnIndices[col] !== undefined) {
+                            const value = row[columnIndices[col]];
+                            item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
+                        }
+                    });
+                    
+                    // Normalize data
+                    item.asin = item.asin.toUpperCase();
+                    item.store_tlc = item.store_tlc.toUpperCase();
+                    
+                    items.push(item);
+                }
+                
+                if (errors.length > 5) {
+                    throw new Error(`Too many validation errors (${errors.length}). First 5 errors:\n${errors.slice(0, 5).join('\n')}`);
+                } else if (errors.length > 0) {
+                    console.warn('XLSX parsing warnings:', errors);
+                }
+                
+                if (items.length === 0) {
+                    throw new Error('No valid items found in the XLSX file');
+                }
+                
+                return items;
+                
+            } catch (error) {
+                if (error.message.includes('Unsupported file')) {
+                    throw new Error('Invalid XLSX file format. Please ensure the file is a valid Excel (.xlsx) file.');
+                }
+                throw error;
+            }
+        }
+
+        // Save item database to storage
+        function saveItemDatabase() {
+            try {
+                GM_setValue('itemDatabase', JSON.stringify(itemDatabase));
+                GM_setValue('itemDatabaseTimestamp', Date.now());
+            } catch (error) {
+                console.error('Error saving item database:', error);
+            }
+        }
+
+        // Load item database from storage
+        function loadItemDatabase() {
+            try {
+                const storedData = GM_getValue('itemDatabase', '[]');
+                const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
+                itemDatabase = JSON.parse(storedData);
+                
+                if (itemDatabase.length > 0) {
+                    const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
+                    console.log(`Loaded ${itemDatabase.length} items from database (${ageHours.toFixed(1)}h old)`);
+                }
+            } catch (error) {
+                console.error('Error loading item database:', error);
+                itemDatabase = [];
+            }
+        }
+
+        // Search items in database
+        function searchItems(query, searchType = 'all') {
+            if (!query || itemDatabase.length === 0) return [];
+            
+            const searchTerm = query.toLowerCase().trim();
+            
+            return itemDatabase.filter(item => {
+                switch (searchType) {
+                    case 'asin':
+                        return item.asin && item.asin.toLowerCase().includes(searchTerm);
+                    case 'name':
+                        return item.item_name && item.item_name.toLowerCase().includes(searchTerm);
+                    case 'sku':
+                        return item.sku && item.sku.toLowerCase().includes(searchTerm);
+                    case 'store':
+                        return (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
+                               (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
+                               (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                    case 'all':
+                    default:
+                        return (item.asin && item.asin.toLowerCase().includes(searchTerm)) ||
+                               (item.item_name && item.item_name.toLowerCase().includes(searchTerm)) ||
+                               (item.sku && item.sku.toLowerCase().includes(searchTerm)) ||
+                               (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
+                               (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
+                               (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                }
+            });
         }
 
         // Store switching functionality
@@ -485,8 +662,8 @@
             }
         }
 
-        // File upload handler
-        function handleFileUpload(file) {
+        // File upload handler for CSV store mappings
+        function handleCSVUpload(file) {
             if (!file) return;
 
             const fileName = file.name.toLowerCase();
@@ -512,15 +689,53 @@
 
                     alert(`✅ Successfully loaded ${storeMappingData.size} store mappings from ${file.name}`);
                 } catch (error) {
-                    alert(`❌ Error parsing file: ${error.message}`);
+                    alert(`❌ Error parsing CSV file: ${error.message}`);
                 }
             };
 
             reader.onerror = function() {
-                alert('❌ Error reading file. Please try again.');
+                alert('❌ Error reading CSV file. Please try again.');
             };
 
             reader.readAsText(file);
+        }
+
+        // File upload handler for XLSX item database
+        function handleXLSXUpload(file) {
+            if (!file) return;
+
+            const fileName = file.name.toLowerCase();
+            if (!fileName.endsWith('.xlsx')) {
+                alert('Please select an XLSX file (.xlsx extension required)');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const arrayBuffer = e.target.result;
+                    const newItems = parseXLSX(arrayBuffer);
+                    
+                    // Update the item database
+                    itemDatabase = newItems;
+                    
+                    // Save to persistent storage
+                    saveItemDatabase();
+                    
+                    // Update UI
+                    updateItemDatabaseStatus();
+
+                    alert(`✅ Successfully loaded ${itemDatabase.length} items from ${file.name}`);
+                } catch (error) {
+                    alert(`❌ Error parsing XLSX file: ${error.message}`);
+                }
+            };
+
+            reader.onerror = function() {
+                alert('❌ Error reading XLSX file. Please try again.');
+            };
+
+            reader.readAsArrayBuffer(file);
         }
 
         // Load saved panel position or use default
@@ -708,9 +923,9 @@
 
         refreshBtn.addEventListener('click', refreshData);
 
-        // Create file upload button and input
+        // Create CSV file upload button and input
         const uploadBtn = document.createElement('button');
-        uploadBtn.textContent = '📁 Upload Store Mapping';
+        uploadBtn.textContent = '📁 Upload Store Mapping (CSV)';
         uploadBtn.style.padding = '10px';
         uploadBtn.style.backgroundColor = '#6f42c1';
         uploadBtn.style.color = '#fff';
@@ -730,10 +945,38 @@
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                handleFileUpload(file);
+                handleCSVUpload(file);
             }
             // Reset the input so the same file can be selected again
             fileInput.value = '';
+        });
+
+        // Create XLSX file upload button and input
+        const xlsxUploadBtn = document.createElement('button');
+        xlsxUploadBtn.textContent = '📊 Upload Item Database (XLSX)';
+        xlsxUploadBtn.style.padding = '10px';
+        xlsxUploadBtn.style.backgroundColor = '#20c997';
+        xlsxUploadBtn.style.color = '#fff';
+        xlsxUploadBtn.style.border = 'none';
+        xlsxUploadBtn.style.borderRadius = '5px';
+        xlsxUploadBtn.style.cursor = 'pointer';
+
+        const xlsxFileInput = document.createElement('input');
+        xlsxFileInput.type = 'file';
+        xlsxFileInput.accept = '.xlsx';
+        xlsxFileInput.style.display = 'none';
+
+        xlsxUploadBtn.addEventListener('click', () => {
+            xlsxFileInput.click();
+        });
+
+        xlsxFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleXLSXUpload(file);
+            }
+            // Reset the input so the same file can be selected again
+            xlsxFileInput.value = '';
         });
 
         // Create store switching dropdown
