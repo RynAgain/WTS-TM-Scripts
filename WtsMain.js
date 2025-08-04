@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.003
+// @version      1.3.004
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -30,8 +30,9 @@
         console.log('✅ XLSX library loaded successfully');
     }
 
-    // Network request interception to capture CSRF tokens - START IMMEDIATELY
+    // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
+    let currentStoreInfo = null;
     let networkInterceptionActive = false;
 
     function startNetworkInterception() {
@@ -55,6 +56,7 @@
         // Intercept fetch requests
         const originalFetch = window.fetch;
         window.fetch = function(url, options) {
+            // Capture CSRF tokens
             if (options && options.headers) {
                 const headers = options.headers;
                 let csrfToken = null;
@@ -73,7 +75,41 @@
                     GM_setValue('lastCapturedTimestamp', Date.now());
                 }
             }
-            return originalFetch.apply(this, arguments);
+            
+            // Intercept summary requests to capture store info
+            const fetchPromise = originalFetch.apply(this, arguments);
+            
+            if (url && url.includes('summary')) {
+                console.log("🏪 Intercepting summary request:", url);
+                fetchPromise.then(response => {
+                    if (response.ok) {
+                        response.clone().json().then(data => {
+                            if (data && data.storeId) {
+                                console.log("🏪 Captured store info:", data);
+                                currentStoreInfo = {
+                                    storeId: data.storeId,
+                                    token: data.token,
+                                    displayName: data.displayName,
+                                    status: data.status,
+                                    phone: data.phone,
+                                    bu: data.bu
+                                };
+                                GM_setValue('currentStoreInfo', JSON.stringify(currentStoreInfo));
+                                GM_setValue('storeInfoTimestamp', Date.now());
+                                
+                                // Update UI if it exists
+                                updateCurrentStoreDisplay();
+                            }
+                        }).catch(err => {
+                            console.log("Error parsing summary response:", err);
+                        });
+                    }
+                }).catch(err => {
+                    console.log("Error processing summary response:", err);
+                });
+            }
+            
+            return fetchPromise;
         };
 
         console.log("✅ Network interception active - monitoring for CSRF tokens");
@@ -93,6 +129,39 @@
             console.log(`⚠️ Captured token is ${ageHours.toFixed(1)}h old, may be expired`);
         }
         
+        return null;
+    }
+
+    function getCurrentStoreInfo() {
+        const storeInfo = GM_getValue('currentStoreInfo', null);
+        const timestamp = GM_getValue('storeInfoTimestamp', 0);
+        const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
+        
+        if (storeInfo && ageHours < 24) { // Store info is less than 24 hours old
+            try {
+                const parsed = JSON.parse(storeInfo);
+                console.log(`🏪 Using captured store info (${ageHours.toFixed(1)}h old):`, parsed);
+                return parsed;
+            } catch (error) {
+                console.error('Error parsing stored store info:', error);
+                return null;
+            }
+        }
+        
+        if (storeInfo) {
+            console.log(`⚠️ Captured store info is ${ageHours.toFixed(1)}h old, may be expired`);
+        }
+        
+        return currentStoreInfo; // Return current session info if available
+    }
+
+    function getStoreTLCFromStoreId(storeId, storeMappingData) {
+        // Find the store_tlc that matches this storeId
+        for (const [tlc, id] of storeMappingData.entries()) {
+            if (id === storeId) {
+                return tlc;
+            }
+        }
         return null;
     }
 
@@ -223,9 +292,12 @@
             return mappings;
         }
 
-        // XLSX parsing function for item database
-        function parseXLSX(arrayBuffer) {
+        // XLSX parsing function for item database with performance optimizations
+        async function parseXLSX(arrayBuffer) {
             try {
+                console.log('📊 Starting XLSX parsing...');
+                const startTime = Date.now();
+                
                 const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                 
                 // Look for the specific sheet "WFMOAC Inventory Data"
@@ -246,6 +318,17 @@
                 
                 if (jsonData.length < 2) {
                     throw new Error('XLSX file must contain at least a header row and one data row');
+                }
+                
+                const totalRows = jsonData.length - 1; // Exclude header
+                console.log(`📊 Processing ${totalRows} rows...`);
+                
+                // Warn about large datasets
+                if (totalRows > 100000) {
+                    const proceed = confirm(`⚠️ Large dataset detected: ${totalRows} rows\n\nThis may take a while and could slow down your browser.\n\nDo you want to continue?`);
+                    if (!proceed) {
+                        throw new Error('Processing cancelled by user');
+                    }
                 }
                 
                 const headers = jsonData[0].map(h => h ? h.toString().trim() : '');
@@ -273,53 +356,75 @@
                 const items = [];
                 const errors = [];
                 
-                for (let i = 1; i < jsonData.length; i++) {
-                    const row = jsonData[i];
+                // Process data in batches to prevent browser freezing
+                const BATCH_SIZE = 1000;
+                const totalBatches = Math.ceil((jsonData.length - 1) / BATCH_SIZE);
+                
+                console.log(`📊 Processing in ${totalBatches} batches of ${BATCH_SIZE} rows each...`);
+                
+                // Process batches with async delays
+                for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+                    const startRow = batchIndex * BATCH_SIZE + 1; // +1 to skip header
+                    const endRow = Math.min(startRow + BATCH_SIZE, jsonData.length);
                     
-                    if (!row || row.length === 0) continue; // Skip empty rows
+                    console.log(`📊 Processing batch ${batchIndex + 1}/${totalBatches} (rows ${startRow}-${endRow - 1})`);
                     
-                    const item = {};
-                    let hasError = false;
-                    
-                    // Process required columns
-                    requiredColumns.forEach(col => {
-                        const value = row[columnIndices[col]];
-                        if (value === undefined || value === null || value === '') {
-                            errors.push(`Row ${i + 1}: Missing required value for "${col}"`);
-                            hasError = true;
-                            return;
-                        }
-                        item[col] = value.toString().trim();
-                    });
-                    
-                    if (hasError) continue;
-                    
-                    // Validate ASIN format
-                    if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
-                        errors.push(`Row ${i + 1}: Invalid ASIN format "${item.asin}" (must be 10 alphanumeric characters)`);
-                        continue;
-                    }
-                    
-                    // Validate store_tlc format
-                    if (item.store_tlc && item.store_tlc.length !== 3) {
-                        errors.push(`Row ${i + 1}: Invalid store_tlc format "${item.store_tlc}" (must be 3 characters)`);
-                        continue;
-                    }
-                    
-                    // Process optional columns
-                    optionalColumns.forEach(col => {
-                        if (columnIndices[col] !== undefined) {
+                    for (let i = startRow; i < endRow; i++) {
+                        const row = jsonData[i];
+                        
+                        if (!row || row.length === 0) continue; // Skip empty rows
+                        
+                        const item = {};
+                        let hasError = false;
+                        
+                        // Process required columns
+                        requiredColumns.forEach(col => {
                             const value = row[columnIndices[col]];
-                            item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
+                            if (value === undefined || value === null || value === '') {
+                                errors.push(`Row ${i + 1}: Missing required value for "${col}"`);
+                                hasError = true;
+                                return;
+                            }
+                            item[col] = value.toString().trim();
+                        });
+                        
+                        if (hasError) continue;
+                        
+                        // Validate ASIN format
+                        if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
+                            errors.push(`Row ${i + 1}: Invalid ASIN format "${item.asin}" (must be 10 alphanumeric characters)`);
+                            continue;
                         }
-                    });
+                        
+                        // Validate store_tlc format
+                        if (item.store_tlc && item.store_tlc.length !== 3) {
+                            errors.push(`Row ${i + 1}: Invalid store_tlc format "${item.store_tlc}" (must be 3 characters)`);
+                            continue;
+                        }
+                        
+                        // Process optional columns
+                        optionalColumns.forEach(col => {
+                            if (columnIndices[col] !== undefined) {
+                                const value = row[columnIndices[col]];
+                                item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
+                            }
+                        });
+                        
+                        // Normalize data
+                        item.asin = item.asin.toUpperCase();
+                        item.store_tlc = item.store_tlc.toUpperCase();
+                        
+                        items.push(item);
+                    }
                     
-                    // Normalize data
-                    item.asin = item.asin.toUpperCase();
-                    item.store_tlc = item.store_tlc.toUpperCase();
-                    
-                    items.push(item);
+                    // Allow browser to breathe between batches for large datasets
+                    if (totalRows > 50000 && batchIndex < totalBatches - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
                 }
+                
+                const processingTime = (Date.now() - startTime) / 1000;
+                console.log(`✅ Processed ${items.length} items in ${processingTime.toFixed(2)} seconds`);
                 
                 if (errors.length > 5) {
                     throw new Error(`Too many validation errors (${errors.length}). First 5 errors:\n${errors.slice(0, 5).join('\n')}`);
@@ -368,34 +473,51 @@
             }
         }
 
-        // Search items in database
+        // Search items in database with performance optimizations
         function searchItems(query, searchType = 'all') {
             if (!query || itemDatabase.length === 0) return [];
             
             const searchTerm = query.toLowerCase().trim();
+            const results = [];
+            const MAX_RESULTS = 50; // Limit results for performance
             
-            return itemDatabase.filter(item => {
+            // For large datasets, stop searching once we have enough results
+            for (let i = 0; i < itemDatabase.length && results.length < MAX_RESULTS; i++) {
+                const item = itemDatabase[i];
+                let matches = false;
+                
                 switch (searchType) {
                     case 'asin':
-                        return item.asin && item.asin.toLowerCase().includes(searchTerm);
+                        matches = item.asin && item.asin.toLowerCase().includes(searchTerm);
+                        break;
                     case 'name':
-                        return item.item_name && item.item_name.toLowerCase().includes(searchTerm);
+                        matches = item.item_name && item.item_name.toLowerCase().includes(searchTerm);
+                        break;
                     case 'sku':
-                        return item.sku && item.sku.toLowerCase().includes(searchTerm);
+                        matches = item.sku && item.sku.toLowerCase().includes(searchTerm);
+                        break;
                     case 'store':
-                        return (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
-                               (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
-                               (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                        matches = (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
+                                 (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
+                                 (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                        break;
                     case 'all':
                     default:
-                        return (item.asin && item.asin.toLowerCase().includes(searchTerm)) ||
-                               (item.item_name && item.item_name.toLowerCase().includes(searchTerm)) ||
-                               (item.sku && item.sku.toLowerCase().includes(searchTerm)) ||
-                               (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
-                               (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
-                               (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                        matches = (item.asin && item.asin.toLowerCase().includes(searchTerm)) ||
+                                 (item.item_name && item.item_name.toLowerCase().includes(searchTerm)) ||
+                                 (item.sku && item.sku.toLowerCase().includes(searchTerm)) ||
+                                 (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
+                                 (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
+                                 (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                        break;
                 }
-            });
+                
+                if (matches) {
+                    results.push(item);
+                }
+            }
+            
+            return results;
         }
 
         // Store switching functionality
@@ -728,10 +850,37 @@
             }
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const arrayBuffer = e.target.result;
-                    const newItems = parseXLSX(arrayBuffer);
+                    
+                    // Show processing message for large files
+                    const processingAlert = document.createElement('div');
+                    processingAlert.style.position = 'fixed';
+                    processingAlert.style.top = '50%';
+                    processingAlert.style.left = '50%';
+                    processingAlert.style.transform = 'translate(-50%, -50%)';
+                    processingAlert.style.background = '#fff';
+                    processingAlert.style.border = '2px solid #007bff';
+                    processingAlert.style.borderRadius = '8px';
+                    processingAlert.style.padding = '20px';
+                    processingAlert.style.zIndex = '10001';
+                    processingAlert.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                    processingAlert.innerHTML = `
+                        <div style="text-align: center;">
+                            <div style="font-size: 16px; margin-bottom: 10px;">📊 Processing XLSX file...</div>
+                            <div style="font-size: 14px; color: #666;">This may take a moment for large files</div>
+                        </div>
+                    `;
+                    document.body.appendChild(processingAlert);
+                    
+                    // Allow UI to update
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    const newItems = await parseXLSX(arrayBuffer);
+                    
+                    // Remove processing message
+                    document.body.removeChild(processingAlert);
                     
                     // Update the item database
                     itemDatabase = newItems;
@@ -744,6 +893,11 @@
 
                     alert(`✅ Successfully loaded ${itemDatabase.length} items from ${file.name}`);
                 } catch (error) {
+                    // Remove processing message if it exists
+                    const processingAlert = document.querySelector('div[style*="Processing XLSX file"]');
+                    if (processingAlert) {
+                        document.body.removeChild(processingAlert.parentElement);
+                    }
                     alert(`❌ Error parsing XLSX file: ${error.message}`);
                 }
             };
@@ -1249,6 +1403,8 @@
                 // Only show search container if it exists
                 if (typeof itemSearchContainer !== 'undefined') {
                     itemSearchContainer.style.display = 'block';
+                    // Update current store display when database is loaded
+                    updateCurrentStoreDisplay();
                 }
             }
         };
@@ -1375,6 +1531,39 @@
         itemSearchLabel.style.color = '#333';
         itemSearchLabel.style.marginBottom = '4px';
         
+        // Current store display
+        const currentStoreDisplayDiv = document.createElement('div');
+        currentStoreDisplayDiv.style.fontSize = '11px';
+        currentStoreDisplayDiv.style.color = '#666';
+        currentStoreDisplayDiv.style.marginBottom = '4px';
+        currentStoreDisplayDiv.style.padding = '4px 8px';
+        currentStoreDisplayDiv.style.backgroundColor = '#f8f9fa';
+        currentStoreDisplayDiv.style.border = '1px solid #dee2e6';
+        currentStoreDisplayDiv.style.borderRadius = '4px';
+        currentStoreDisplayDiv.textContent = 'Store info not available';
+        
+        // Store filter toggle
+        const storeFilterContainer = document.createElement('div');
+        storeFilterContainer.style.marginBottom = '4px';
+        storeFilterContainer.style.display = 'flex';
+        storeFilterContainer.style.alignItems = 'center';
+        storeFilterContainer.style.gap = '8px';
+        
+        const storeFilterCheckbox = document.createElement('input');
+        storeFilterCheckbox.type = 'checkbox';
+        storeFilterCheckbox.id = 'storeFilterCheckbox';
+        storeFilterCheckbox.checked = false;
+        
+        const storeFilterLabel = document.createElement('label');
+        storeFilterLabel.htmlFor = 'storeFilterCheckbox';
+        storeFilterLabel.textContent = 'Filter to current store only';
+        storeFilterLabel.style.fontSize = '11px';
+        storeFilterLabel.style.color = '#666';
+        storeFilterLabel.style.cursor = 'pointer';
+        
+        storeFilterContainer.appendChild(storeFilterCheckbox);
+        storeFilterContainer.appendChild(storeFilterLabel);
+        
         const searchTypeSelect = document.createElement('select');
         searchTypeSelect.style.width = '100%';
         searchTypeSelect.style.padding = '6px';
@@ -1427,7 +1616,16 @@
                 return;
             }
             
-            const results = searchItems(query, searchType);
+            let results = searchItems(query, searchType);
+            
+            // Apply store filtering if enabled
+            if (storeFilterCheckbox.checked) {
+                const currentStoreTLC = getCurrentStoreTLC();
+                if (currentStoreTLC) {
+                    results = results.filter(item => item.store_tlc === currentStoreTLC);
+                }
+            }
+            
             displaySearchResults(results);
         }
         
@@ -1448,6 +1646,8 @@
             // Limit results to first 10 for performance
             const limitedResults = results.slice(0, 10);
             
+            const currentStoreTLC = getCurrentStoreTLC();
+            
             limitedResults.forEach(item => {
                 const resultItem = document.createElement('div');
                 resultItem.style.padding = '8px';
@@ -1455,18 +1655,34 @@
                 resultItem.style.cursor = 'pointer';
                 resultItem.style.fontSize = '11px';
                 
+                // Highlight current store items
+                const isCurrentStore = currentStoreTLC && item.store_tlc === currentStoreTLC;
+                if (isCurrentStore) {
+                    resultItem.style.backgroundColor = '#e8f5e8';
+                    resultItem.style.borderLeft = '3px solid #28a745';
+                }
+                
+                const storeIndicator = isCurrentStore ? '🏪 ' : '';
+                const storeColor = isCurrentStore ? '#28a745' : '#666';
+                
                 resultItem.innerHTML = `
                     <div style="font-weight: bold; color: #007bff;">${item.item_name}</div>
                     <div style="color: #666;">ASIN: ${item.asin} | SKU: ${item.sku}</div>
-                    <div style="color: #666;">Store: ${item.store_name} (${item.store_tlc})</div>
+                    <div style="color: ${storeColor};">${storeIndicator}Store: ${item.store_name} (${item.store_tlc})</div>
                 `;
                 
                 resultItem.addEventListener('mouseenter', () => {
-                    resultItem.style.backgroundColor = '#e9ecef';
+                    if (!isCurrentStore) {
+                        resultItem.style.backgroundColor = '#e9ecef';
+                    }
                 });
                 
                 resultItem.addEventListener('mouseleave', () => {
-                    resultItem.style.backgroundColor = 'transparent';
+                    if (isCurrentStore) {
+                        resultItem.style.backgroundColor = '#e8f5e8';
+                    } else {
+                        resultItem.style.backgroundColor = 'transparent';
+                    }
                 });
                 
                 resultItem.addEventListener('click', () => {
@@ -1510,9 +1726,35 @@
         }
         
         function getCurrentStoreTLC() {
-            // Try to extract current store from URL or page context
-            // This is a placeholder - you might need to implement based on how store info is available
+            const storeInfo = getCurrentStoreInfo();
+            if (storeInfo && storeInfo.storeId) {
+                const tlc = getStoreTLCFromStoreId(storeInfo.storeId, storeMappingData);
+                if (tlc) {
+                    console.log(`🏪 Current store TLC: ${tlc} (${storeInfo.displayName})`);
+                    return tlc;
+                }
+            }
             return null;
+        }
+
+        function updateCurrentStoreDisplay() {
+            // Update store display if UI elements exist
+            if (typeof currentStoreDisplayDiv !== 'undefined') {
+                const storeInfo = getCurrentStoreInfo();
+                if (storeInfo) {
+                    const tlc = getStoreTLCFromStoreId(storeInfo.storeId, storeMappingData);
+                    if (tlc) {
+                        currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (${tlc})`;
+                        currentStoreDisplayDiv.style.color = '#28a745';
+                    } else {
+                        currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (ID: ${storeInfo.storeId})`;
+                        currentStoreDisplayDiv.style.color = '#ffc107';
+                    }
+                } else {
+                    currentStoreDisplayDiv.textContent = 'Store info not available';
+                    currentStoreDisplayDiv.style.color = '#666';
+                }
+            }
         }
         
         function navigateToItemWithContext(item) {
@@ -1537,6 +1779,9 @@
         
         searchTypeSelect.addEventListener('change', performSearch);
         
+        // Store filter checkbox event listener
+        storeFilterCheckbox.addEventListener('change', performSearch);
+        
         itemSearchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performSearch();
@@ -1551,6 +1796,8 @@
         });
         
         itemSearchContainer.appendChild(itemSearchLabel);
+        itemSearchContainer.appendChild(currentStoreDisplayDiv);
+        itemSearchContainer.appendChild(storeFilterContainer);
         itemSearchContainer.appendChild(searchTypeSelect);
         itemSearchContainer.appendChild(itemSearchInput);
         itemSearchContainer.appendChild(searchResultsContainer);
@@ -1570,6 +1817,9 @@
         loadItemDatabase(); // Load stored item database
         updateStatus();
         updateItemDatabaseStatus();
+        
+        // Initialize current store display
+        updateCurrentStoreDisplay();
         
         console.log('✅ WTS Tools panel created successfully');
         
