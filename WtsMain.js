@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.001
+// @version      1.3.002
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -18,6 +18,17 @@
 
 (function () {
     'use strict';
+    
+    // Debug logging for troubleshooting
+    console.log('🚀 WTS Tools script starting...');
+    
+    // Check if XLSX library is loaded
+    if (typeof XLSX === 'undefined') {
+        console.error('❌ XLSX library not loaded! Script may not work properly.');
+        alert('❌ XLSX library failed to load. Some features may not work. Please refresh the page.');
+    } else {
+        console.log('✅ XLSX library loaded successfully');
+    }
 
     // Network request interception to capture CSRF tokens - START IMMEDIATELY
     let capturedCSRFToken = null;
@@ -121,9 +132,12 @@
     }
 
     function createExportButton() {
-        let lastExtractedData = [];
-        let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
-        let itemDatabase = []; // Item database from XLSX: Array of item objects
+        try {
+            console.log('🔧 Initializing WTS Tools...');
+            
+            let lastExtractedData = [];
+            let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
+            let itemDatabase = []; // Item database from XLSX: Array of item objects
 
         // Load stored mappings from Tampermonkey storage
         function loadStoredMappings() {
@@ -1548,29 +1562,53 @@
         contentContainer.appendChild(fileInput);
         contentContainer.appendChild(xlsxFileInput);
         document.body.appendChild(panel);
+        
+        console.log('✅ WTS Tools panel created successfully');
+        
+        } catch (error) {
+            console.error('❌ Error creating WTS Tools:', error);
+            alert(`❌ Failed to create WTS Tools: ${error.message}\n\nCheck the browser console for more details.`);
+        }
     }
 
     window.addEventListener('load', () => {
-        createExportButton();
+        try {
+            console.log('🎯 Page loaded, creating export button...');
+            createExportButton();
+            console.log('✅ Export button created successfully');
 
-        // Dynamic card count display
-        const counter = document.createElement('div');
-        counter.id = 'asin-card-counter';
-        counter.style.fontSize = '13px';
-        counter.style.color = '#333';
-        counter.style.marginTop = '8px';
-        counter.style.padding = '4px 0';
-        counter.style.borderTop = '1px solid #dee2e6';
-        counter.style.textAlign = 'center';
-        
-        // Find the panel and append to its content container
-        const panel = document.querySelector('body > div[style*="position: fixed"]');
-        const contentContainer = panel?.querySelector('div:last-child');
-        contentContainer?.appendChild(counter);
+            // Dynamic card count display
+            const counter = document.createElement('div');
+            counter.id = 'asin-card-counter';
+            counter.style.fontSize = '13px';
+            counter.style.color = '#333';
+            counter.style.marginTop = '8px';
+            counter.style.padding = '4px 0';
+            counter.style.borderTop = '1px solid #dee2e6';
+            counter.style.textAlign = 'center';
+            
+            // Find the panel and append to its content container
+            const panel = document.querySelector('body > div[style*="position: fixed"]');
+            const contentContainer = panel?.querySelector('div:last-child');
+            if (contentContainer) {
+                contentContainer.appendChild(counter);
+                console.log('✅ Counter added to panel');
+            } else {
+                console.warn('⚠️ Could not find content container for counter');
+            }
 
-        setInterval(() => {
-            const { data, emptyCount } = extractDataFromCards();
-            counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
-        }, 1000);
+            setInterval(() => {
+                try {
+                    const { data, emptyCount } = extractDataFromCards();
+                    counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
+                } catch (error) {
+                    console.error('Error updating counter:', error);
+                }
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Error in window load handler:', error);
+            alert(`❌ WTS Tools failed to initialize: ${error.message}\n\nCheck the browser console for more details.`);
+        }
     });
 })();
