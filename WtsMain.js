@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.002
+// @version      1.3.003
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1235,7 +1235,10 @@
             if (itemDatabase.length === 0) {
                 itemDatabaseStatusDiv.textContent = 'No item database loaded';
                 itemDatabaseStatusDiv.style.color = '#666';
-                itemSearchContainer.style.display = 'none';
+                // Only hide search container if it exists
+                if (typeof itemSearchContainer !== 'undefined') {
+                    itemSearchContainer.style.display = 'none';
+                }
             } else {
                 const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
                 const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
@@ -1243,17 +1246,17 @@
                 
                 itemDatabaseStatusDiv.textContent = `${itemDatabase.length} items loaded (${ageText} ago)`;
                 itemDatabaseStatusDiv.style.color = '#28a745';
-                itemSearchContainer.style.display = 'block';
+                // Only show search container if it exists
+                if (typeof itemSearchContainer !== 'undefined') {
+                    itemSearchContainer.style.display = 'block';
+                }
             }
         };
 
         // Note: File upload handlers (handleCSVUpload and handleXLSXUpload)
         // automatically update their respective status displays
 
-        // Initialize status on load
-        loadItemDatabase(); // Load stored item database
-        updateStatus();
-        updateItemDatabaseStatus();
+        // Note: Initialization will be done after all UI elements are created
 
         contentContainer.appendChild(exportBtn);
         contentContainer.appendChild(refreshBtn);
@@ -1562,6 +1565,11 @@
         contentContainer.appendChild(fileInput);
         contentContainer.appendChild(xlsxFileInput);
         document.body.appendChild(panel);
+        
+        // Initialize status after all UI elements are created
+        loadItemDatabase(); // Load stored item database
+        updateStatus();
+        updateItemDatabaseStatus();
         
         console.log('✅ WTS Tools panel created successfully');
         
