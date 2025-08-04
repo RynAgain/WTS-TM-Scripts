@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping - Modular
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.001
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality - Modular Architecture
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts

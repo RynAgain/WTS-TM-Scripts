@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Whole Foods ASIN Exporter with Store Mapping
+// @name         Whole Foods ASIN Exporter with Store Mapping -mods
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      2.0.001
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality - Modular Architecture
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -115,6 +115,11 @@
             setTimeout(() => {
                 // Force check in case some events were already fired
                 if (WTS.shared && WTS.shared.logger) readyModules.add('sharedReady');
+                if (WTS.modules.CSRFSettings && typeof WTS.modules.CSRFSettings.init === 'function') readyModules.add('csrfSettingsReady');
+                if (WTS.modules.StoreManager && typeof WTS.modules.StoreManager.init === 'function') readyModules.add('storeManagerReady');
+                if (WTS.modules.DataExporter && typeof WTS.modules.DataExporter.init === 'function') readyModules.add('dataExporterReady');
+                if (WTS.modules.MainUI && typeof WTS.modules.MainUI.init === 'function') readyModules.add('mainUIReady');
+                if (WTS.modules.LiveCounter && typeof WTS.modules.LiveCounter.init === 'function') readyModules.add('liveCounterReady');
                 checkAllReady();
             }, 100);
         });
