@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.2.001
+// @version      1.2.002
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -975,6 +975,110 @@
 
         contentContainer.appendChild(exportBtn);
         contentContainer.appendChild(refreshBtn);
+        
+        // ASIN Input Feature
+        const asinInputContainer = document.createElement('div');
+        asinInputContainer.style.marginTop = '8px';
+        
+        const asinInput = document.createElement('input');
+        asinInput.type = 'text';
+        asinInput.placeholder = 'Enter ASIN (e.g., B08N5WRWNW)';
+        asinInput.style.width = '100%';
+        asinInput.style.padding = '8px';
+        asinInput.style.border = '1px solid #ccc';
+        asinInput.style.borderRadius = '4px';
+        asinInput.style.fontSize = '12px';
+        asinInput.style.boxSizing = 'border-box';
+        asinInput.style.marginBottom = '4px';
+        
+        const goToItemBtn = document.createElement('button');
+        goToItemBtn.textContent = '🔗 Go to Item';
+        goToItemBtn.style.padding = '10px';
+        goToItemBtn.style.backgroundColor = '#fd7e14';
+        goToItemBtn.style.color = '#fff';
+        goToItemBtn.style.border = 'none';
+        goToItemBtn.style.borderRadius = '5px';
+        goToItemBtn.style.cursor = 'pointer';
+        goToItemBtn.style.width = '100%';
+        
+        // ASIN validation function
+        function validateASIN(asin) {
+            // Remove whitespace and convert to uppercase
+            const cleanASIN = asin.trim().toUpperCase();
+            
+            // Check if ASIN is exactly 10 characters and alphanumeric
+            const asinRegex = /^[A-Z0-9]{10}$/;
+            return asinRegex.test(cleanASIN);
+        }
+        
+        // Navigation function
+        function navigateToItem(asin) {
+            const cleanASIN = asin.trim().toUpperCase();
+            
+            if (!validateASIN(cleanASIN)) {
+                alert('❌ Invalid ASIN format. ASINs must be exactly 10 alphanumeric characters (e.g., B08N5WRWNW)');
+                return;
+            }
+            
+            // Show loading feedback
+            const originalButtonText = goToItemBtn.textContent;
+            goToItemBtn.textContent = '🔄 Opening...';
+            goToItemBtn.disabled = true;
+            
+            try {
+                // Construct Whole Foods item URL
+                const itemURL = `https://www.wholefoodsmarket.com/name/dp/${cleanASIN}`;
+                
+                // Open in new tab
+                window.open(itemURL, '_blank');
+                
+                // Clear input after successful navigation
+                asinInput.value = '';
+                
+                // Provide success feedback
+                setTimeout(() => {
+                    alert(`✅ Opened item page for ASIN: ${cleanASIN}`);
+                }, 500);
+                
+            } catch (error) {
+                console.error('Navigation error:', error);
+                alert('❌ Failed to open item page. Please try again.');
+            } finally {
+                // Restore button state
+                setTimeout(() => {
+                    goToItemBtn.textContent = originalButtonText;
+                    goToItemBtn.disabled = false;
+                }, 1000);
+            }
+        }
+        
+        // Event listeners
+        goToItemBtn.addEventListener('click', () => {
+            const asin = asinInput.value;
+            if (!asin.trim()) {
+                alert('❌ Please enter an ASIN');
+                asinInput.focus();
+                return;
+            }
+            navigateToItem(asin);
+        });
+        
+        // Allow Enter key to trigger navigation
+        asinInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const asin = asinInput.value;
+                if (!asin.trim()) {
+                    alert('❌ Please enter an ASIN');
+                    return;
+                }
+                navigateToItem(asin);
+            }
+        });
+        
+        asinInputContainer.appendChild(asinInput);
+        asinInputContainer.appendChild(goToItemBtn);
+        contentContainer.appendChild(asinInputContainer);
+        
         contentContainer.appendChild(uploadBtn);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
