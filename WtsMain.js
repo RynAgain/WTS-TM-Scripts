@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.009
+// @version      1.3.010
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -16,17 +16,52 @@
 // @grant        GM_xmlhttpRequest
 // @connect      share.amazon.com
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
-// @run-at       document-start
+// @run-at       document-idle
 // ==/UserScript==
 
 (function () {
     'use strict';
+    
+    // IMMEDIATE VISIBILITY TEST - This should always show in console
+    console.log('🚨 WTS TOOLS SCRIPT LOADED - If you see this, the script is running!');
+    console.log('🚨 Timestamp:', new Date().toISOString());
     
     // Enhanced debug logging for troubleshooting
     console.log('🚀 WTS Tools script starting...');
     console.log('📍 Current URL:', window.location.href);
     console.log('📍 Document ready state:', document.readyState);
     console.log('📍 Timestamp:', new Date().toISOString());
+    console.log('📍 Body exists:', !!document.body);
+    console.log('📍 Script run-at changed to document-idle for better DOM readiness');
+    
+    // Test if we're on the right domain
+    if (!window.location.hostname.includes('wholefoodsmarket.com')) {
+        console.warn('⚠️ Script running on non-Whole Foods domain:', window.location.hostname);
+    } else {
+        console.log('✅ Script running on correct domain');
+    }
+    
+    // Simple test to verify script execution
+    try {
+        console.log('🧪 Testing basic functionality...');
+        console.log('🧪 Tampermonkey GM functions available:', {
+            GM_setValue: typeof GM_setValue,
+            GM_getValue: typeof GM_getValue,
+            GM_xmlhttpRequest: typeof GM_xmlhttpRequest
+        });
+        
+        // Test basic DOM access
+        console.log('🧪 DOM access test:', {
+            document: typeof document,
+            body: !!document.body,
+            querySelector: typeof document.querySelector
+        });
+        
+        console.log('✅ Basic functionality test passed');
+    } catch (error) {
+        console.error('❌ Basic functionality test failed:', error);
+        alert('❌ WTS Tools script failed basic tests. Check console for details.');
+    }
     
     // Check if XLSX library is loaded
     if (typeof XLSX === 'undefined') {
@@ -2128,6 +2163,8 @@
             console.log(`🔄 Initializing WTS Tools (attempt ${initializationAttempts + 1}/${maxInitializationAttempts})...`);
             console.log('📍 Current URL:', window.location.href);
             console.log('📍 Document ready state:', document.readyState);
+            console.log('📍 Body exists:', !!document.body);
+            console.log('📍 Body children count:', document.body ? document.body.children.length : 0);
             
             // Check if already initialized and panel exists
             if (isInitialized && wtsPanel && document.body.contains(wtsPanel)) {
@@ -2238,15 +2275,15 @@
                 contentContainer.appendChild(counter);
                 console.log('✅ Counter added to panel');
                 
-                // CRITICAL BUG: Unbounded interval - never cleared!
-                console.log("🐛 INTERVAL DEBUG - Creating card counter interval (potential memory leak)");
+                // FIXED: Properly managed interval with cleanup
+                console.log("🐛 INTERVAL DEBUG - Creating card counter interval with proper cleanup");
                 cardCounterInterval = setInterval(() => {
                     try {
-                        if (document.body.contains(counter)) {
+                        if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
                             const { data, emptyCount } = extractDataFromCards();
                             counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
                         } else {
-                            console.log("🐛 INTERVAL DEBUG - Counter element removed, clearing interval");
+                            console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                             if (cardCounterInterval) {
                                 clearInterval(cardCounterInterval);
                                 cardCounterInterval = null;
@@ -2254,6 +2291,11 @@
                         }
                     } catch (error) {
                         console.error('Error updating counter:', error);
+                        // Clear interval on persistent errors
+                        if (cardCounterInterval) {
+                            clearInterval(cardCounterInterval);
+                            cardCounterInterval = null;
+                        }
                     }
                 }, 1000);
                 console.log("🐛 INTERVAL DEBUG - Card counter interval ID:", cardCounterInterval);
@@ -2319,9 +2361,12 @@
     // Multiple initialization triggers for better reliability
     function setupInitializationTriggers() {
         console.log('🎯 Setting up initialization triggers...');
+        console.log('📍 Document ready state at setup:', document.readyState);
+        console.log('📍 Body exists at setup:', !!document.body);
         
         // Trigger 1: DOM Content Loaded
         if (document.readyState === 'loading') {
+            console.log('🎯 Document still loading, setting up DOMContentLoaded listener');
             document.addEventListener('DOMContentLoaded', () => {
                 console.log('🎯 DOMContentLoaded triggered');
                 setTimeout(initializeWTSTools, 500);
@@ -2330,6 +2375,7 @@
         
         // Trigger 2: Window Load
         if (document.readyState !== 'complete') {
+            console.log('🎯 Document not complete, setting up window load listener');
             window.addEventListener('load', () => {
                 console.log('🎯 Window load triggered');
                 setTimeout(initializeWTSTools, 1000);
@@ -2339,14 +2385,19 @@
         // Trigger 3: Immediate if document is already ready
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             console.log('🎯 Document already ready, initializing immediately');
+            console.log('📍 Body exists for immediate init:', !!document.body);
             setTimeout(initializeWTSTools, 100);
         }
         
-        // Trigger 4: Fallback timer
+        // Trigger 4: Fallback timer with more logging
         setTimeout(() => {
             if (!isInitialized) {
-                console.log('🎯 Fallback timer triggered');
+                console.log('🎯 Fallback timer triggered - script may have failed to initialize');
+                console.log('📍 Current state - Body exists:', !!document.body);
+                console.log('📍 Current state - Document ready:', document.readyState);
                 initializeWTSTools();
+            } else {
+                console.log('✅ Script already initialized, fallback timer not needed');
             }
         }, 5000);
         
@@ -2370,11 +2421,27 @@
             setTimeout(handleUrlChange, 100);
         });
         
-        // Method 2: URL polling as backup
-        // CRITICAL BUG: Unbounded interval - never cleared!
-        console.log("🐛 INTERVAL DEBUG - Creating URL polling interval (potential memory leak)");
+        // Method 2: URL polling as backup with proper cleanup
+        console.log("🐛 INTERVAL DEBUG - Creating URL polling interval with cleanup mechanism");
         urlPollingInterval = setInterval(() => {
-            handleUrlChange();
+            try {
+                handleUrlChange();
+                // Auto-cleanup if page becomes inactive or script is disabled
+                if (!document.body || document.hidden) {
+                    console.log("🐛 INTERVAL DEBUG - Page inactive, clearing URL polling interval");
+                    if (urlPollingInterval) {
+                        clearInterval(urlPollingInterval);
+                        urlPollingInterval = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Error in URL polling:', error);
+                // Clear interval on persistent errors
+                if (urlPollingInterval) {
+                    clearInterval(urlPollingInterval);
+                    urlPollingInterval = null;
+                }
+            }
         }, 2000);
         console.log("🐛 INTERVAL DEBUG - URL polling interval ID:", urlPollingInterval);
         
