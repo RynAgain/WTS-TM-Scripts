@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.008
+// @version      1.3.009
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -16,6 +16,7 @@
 // @grant        GM_xmlhttpRequest
 // @connect      share.amazon.com
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
@@ -47,6 +48,9 @@
     // FIXED: Add interval tracking for proper cleanup
     let cardCounterInterval = null;
     let urlPollingInterval = null;
+    
+    // FIXED: Add initialization guard to prevent overlapping runs
+    let _initializing = false;
 
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
@@ -711,7 +715,7 @@
         }
 
         // Store switching functionality
-        async function switchToStore(storeCode) {
+        async function switchToStore(storeCode, buttonEl) {
             const storeId = storeMappingData.get(storeCode);
             if (!storeId) {
                 alert(`❌ Store code ${storeCode} not found in mappings`);
@@ -920,9 +924,11 @@
             }
 
             // Show loading feedback
-            const originalButtonText = switchBtn.textContent;
-            switchBtn.textContent = '🔄 Switching...';
-            switchBtn.disabled = true;
+            const originalButtonText = buttonEl?.textContent ?? '🔄 Switching...';
+            if (buttonEl) {
+                buttonEl.textContent = '🔄 Switching...';
+                buttonEl.disabled = true;
+            }
 
             try {
                 // Use the exact fetch pattern from StoreChangeExample.js
@@ -983,8 +989,10 @@
                 alert(errorMessage);
             } finally {
                 // Restore button state
-                switchBtn.textContent = originalButtonText;
-                switchBtn.disabled = false;
+                if (buttonEl) {
+                    buttonEl.textContent = originalButtonText;
+                    buttonEl.disabled = false;
+                }
             }
         }
 
@@ -1040,7 +1048,7 @@
         panel.style.position = 'fixed';
         panel.style.top = savedPosition.y + 'px';
         panel.style.left = savedPosition.x + 'px';
-        panel.style.zIndex = '9999';
+        panel.style.zIndex = '2147483647'; // FIXED: Use maximum z-index to stay above WFM overlays
         panel.style.background = '#f9f9f9';
         panel.style.border = '1px solid #ccc';
         panel.style.borderRadius = '8px';
@@ -1412,7 +1420,7 @@
         switchBtn.addEventListener('click', () => {
             const selectedStoreCode = storeSelect.value;
             if (selectedStoreCode) {
-                switchToStore(selectedStoreCode);
+                switchToStore(selectedStoreCode, switchBtn);
             } else {
                 alert('Please select a store to switch to');
             }
@@ -2109,6 +2117,13 @@
 
     // Enhanced initialization function with retry logic
     function initializeWTSTools() {
+        // FIXED: Prevent overlapping initialization runs
+        if (_initializing) {
+            console.log('🔄 Initialization already in progress, skipping...');
+            return false;
+        }
+        _initializing = true;
+        
         try {
             console.log(`🔄 Initializing WTS Tools (attempt ${initializationAttempts + 1}/${maxInitializationAttempts})...`);
             console.log('📍 Current URL:', window.location.href);
@@ -2164,6 +2179,9 @@
                 alert(`❌ WTS Tools failed to initialize after ${maxInitializationAttempts} attempts.\n\nError: ${error.message}\n\nPlease refresh the page or check the console for details.`);
             }
             return false;
+        } finally {
+            // FIXED: Always clear the initialization guard
+            _initializing = false;
         }
     }
 
@@ -2171,28 +2189,33 @@
     function cleanupExistingPanel() {
         console.log('🧹 Cleaning up existing panels...');
         
-        // Clear any existing retry timeout
+        // FIXED: Only remove our own panel, not all fixed elements
+        document.querySelectorAll('#wts-panel').forEach(panel => {
+            console.log('🗑️ Removing existing WTS panel');
+            panel.remove();
+        });
+        
+        // FIXED: Clear all leftover timers created by prior runs
         if (initializationRetryTimeout) {
             clearTimeout(initializationRetryTimeout);
             initializationRetryTimeout = null;
         }
-        
-        // Remove existing panels
-        const existingPanels = document.querySelectorAll('body > div[style*="position: fixed"][style*="z-index: 9999"]');
-        existingPanels.forEach((panel, index) => {
-            console.log(`🗑️ Removing existing panel ${index + 1}`);
-            panel.remove();
-        });
-        
-        // Reset state
-        wtsPanel = null;
-        isInitialized = false;
-        
-        // Stop existing persistence monitoring
         if (persistenceCheckInterval) {
             clearInterval(persistenceCheckInterval);
             persistenceCheckInterval = null;
         }
+        if (cardCounterInterval) {
+            clearInterval(cardCounterInterval);
+            cardCounterInterval = null;
+        }
+        if (urlPollingInterval) {
+            clearInterval(urlPollingInterval);
+            urlPollingInterval = null;
+        }
+        
+        // Reset state
+        wtsPanel = null;
+        isInitialized = false;
     }
 
     // Add dynamic card counter to the panel
