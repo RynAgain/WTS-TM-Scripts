@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.004
-// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and XLSX item database functionality
+// @version      1.3.005
+// @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
@@ -13,6 +13,8 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
+// @grant        GM_xmlhttpRequest
+// @connect      share.amazon.com
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
 // ==/UserScript==
 
@@ -446,30 +448,113 @@
             }
         }
 
-        // Save item database to storage
+        // Save item database to storage with chunking for large datasets
         function saveItemDatabase() {
             try {
-                GM_setValue('itemDatabase', JSON.stringify(itemDatabase));
+                console.log(`💾 Saving ${itemDatabase.length} items to storage...`);
+                const startTime = Date.now();
+                
+                const jsonString = JSON.stringify(itemDatabase);
+                const jsonSize = new Blob([jsonString]).size;
+                console.log(`📊 Database JSON size: ${(jsonSize / 1024 / 1024).toFixed(2)} MB`);
+                
+                // Check if data is too large for single storage (Tampermonkey limit is ~5MB per key)
+                const MAX_CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to be safe
+                
+                if (jsonSize > MAX_CHUNK_SIZE) {
+                    console.log('📦 Large dataset detected, using chunked storage...');
+                    
+                    // Clear any existing chunks
+                    let chunkIndex = 0;
+                    while (GM_getValue(`itemDatabase_chunk_${chunkIndex}`, null) !== null) {
+                        GM_deleteValue(`itemDatabase_chunk_${chunkIndex}`);
+                        chunkIndex++;
+                    }
+                    
+                    // Split into chunks
+                    const chunks = [];
+                    for (let i = 0; i < jsonString.length; i += MAX_CHUNK_SIZE) {
+                        chunks.push(jsonString.slice(i, i + MAX_CHUNK_SIZE));
+                    }
+                    
+                    // Save chunks
+                    chunks.forEach((chunk, index) => {
+                        GM_setValue(`itemDatabase_chunk_${index}`, chunk);
+                    });
+                    
+                    // Save metadata
+                    GM_setValue('itemDatabase_chunks', chunks.length);
+                    GM_setValue('itemDatabase_size', itemDatabase.length);
+                    GM_deleteValue('itemDatabase'); // Remove old single storage
+                    
+                    console.log(`✅ Saved ${chunks.length} chunks in ${(Date.now() - startTime)}ms`);
+                } else {
+                    // Small enough for single storage
+                    GM_setValue('itemDatabase', jsonString);
+                    GM_deleteValue('itemDatabase_chunks'); // Clean up any old chunks
+                    console.log(`✅ Saved single database in ${(Date.now() - startTime)}ms`);
+                }
+                
                 GM_setValue('itemDatabaseTimestamp', Date.now());
+                
             } catch (error) {
-                console.error('Error saving item database:', error);
+                console.error('❌ Error saving item database:', error);
+                alert(`❌ Failed to save item database: ${error.message}\n\nThe database may be too large for storage. Try using a smaller dataset.`);
             }
         }
 
-        // Load item database from storage
+        // Load item database from storage with chunking support
         function loadItemDatabase() {
             try {
-                const storedData = GM_getValue('itemDatabase', '[]');
+                console.log('📂 Loading item database from storage...');
+                const startTime = Date.now();
+                
                 const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
-                itemDatabase = JSON.parse(storedData);
+                const chunkCount = GM_getValue('itemDatabase_chunks', 0);
+                
+                if (chunkCount > 0) {
+                    // Load chunked data
+                    console.log(`📦 Loading ${chunkCount} chunks...`);
+                    let jsonString = '';
+                    
+                    for (let i = 0; i < chunkCount; i++) {
+                        const chunk = GM_getValue(`itemDatabase_chunk_${i}`, '');
+                        if (!chunk) {
+                            throw new Error(`Missing chunk ${i} of ${chunkCount}`);
+                        }
+                        jsonString += chunk;
+                    }
+                    
+                    itemDatabase = JSON.parse(jsonString);
+                    console.log(`✅ Loaded ${itemDatabase.length} items from ${chunkCount} chunks in ${(Date.now() - startTime)}ms`);
+                } else {
+                    // Load single storage (legacy or small datasets)
+                    const storedData = GM_getValue('itemDatabase', '[]');
+                    itemDatabase = JSON.parse(storedData);
+                    
+                    if (itemDatabase.length > 0) {
+                        console.log(`✅ Loaded ${itemDatabase.length} items from single storage in ${(Date.now() - startTime)}ms`);
+                    }
+                }
                 
                 if (itemDatabase.length > 0) {
                     const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-                    console.log(`Loaded ${itemDatabase.length} items from database (${ageHours.toFixed(1)}h old)`);
+                    console.log(`📊 Database age: ${ageHours.toFixed(1)} hours`);
                 }
+                
             } catch (error) {
-                console.error('Error loading item database:', error);
+                console.error('❌ Error loading item database:', error);
+                console.log('🔄 Resetting item database due to load error');
                 itemDatabase = [];
+                
+                // Clean up corrupted storage
+                GM_deleteValue('itemDatabase');
+                GM_deleteValue('itemDatabase_chunks');
+                let chunkIndex = 0;
+                while (GM_getValue(`itemDatabase_chunk_${chunkIndex}`, null) !== null) {
+                    GM_deleteValue(`itemDatabase_chunk_${chunkIndex}`);
+                    chunkIndex++;
+                }
             }
         }
 
@@ -839,75 +924,8 @@
             reader.readAsText(file);
         }
 
-        // File upload handler for XLSX item database
-        function handleXLSXUpload(file) {
-            if (!file) return;
-
-            const fileName = file.name.toLowerCase();
-            if (!fileName.endsWith('.xlsx')) {
-                alert('Please select an XLSX file (.xlsx extension required)');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                try {
-                    const arrayBuffer = e.target.result;
-                    
-                    // Show processing message for large files
-                    const processingAlert = document.createElement('div');
-                    processingAlert.style.position = 'fixed';
-                    processingAlert.style.top = '50%';
-                    processingAlert.style.left = '50%';
-                    processingAlert.style.transform = 'translate(-50%, -50%)';
-                    processingAlert.style.background = '#fff';
-                    processingAlert.style.border = '2px solid #007bff';
-                    processingAlert.style.borderRadius = '8px';
-                    processingAlert.style.padding = '20px';
-                    processingAlert.style.zIndex = '10001';
-                    processingAlert.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                    processingAlert.innerHTML = `
-                        <div style="text-align: center;">
-                            <div style="font-size: 16px; margin-bottom: 10px;">📊 Processing XLSX file...</div>
-                            <div style="font-size: 14px; color: #666;">This may take a moment for large files</div>
-                        </div>
-                    `;
-                    document.body.appendChild(processingAlert);
-                    
-                    // Allow UI to update
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    const newItems = await parseXLSX(arrayBuffer);
-                    
-                    // Remove processing message
-                    document.body.removeChild(processingAlert);
-                    
-                    // Update the item database
-                    itemDatabase = newItems;
-                    
-                    // Save to persistent storage
-                    saveItemDatabase();
-                    
-                    // Update UI
-                    updateItemDatabaseStatus();
-
-                    alert(`✅ Successfully loaded ${itemDatabase.length} items from ${file.name}`);
-                } catch (error) {
-                    // Remove processing message if it exists
-                    const processingAlert = document.querySelector('div[style*="Processing XLSX file"]');
-                    if (processingAlert) {
-                        document.body.removeChild(processingAlert.parentElement);
-                    }
-                    alert(`❌ Error parsing XLSX file: ${error.message}`);
-                }
-            };
-
-            reader.onerror = function() {
-                alert('❌ Error reading XLSX file. Please try again.');
-            };
-
-            reader.readAsArrayBuffer(file);
-        }
+        // SharePoint data refresh functionality is now handled above
+        // Old XLSX upload functionality has been replaced with SharePoint integration
 
         // Load saved panel position or use default
         const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
@@ -1122,33 +1140,121 @@
             fileInput.value = '';
         });
 
-        // Create XLSX file upload button and input
-        const xlsxUploadBtn = document.createElement('button');
-        xlsxUploadBtn.textContent = '📊 Upload Item Database (XLSX)';
-        xlsxUploadBtn.style.padding = '10px';
-        xlsxUploadBtn.style.backgroundColor = '#20c997';
-        xlsxUploadBtn.style.color = '#fff';
-        xlsxUploadBtn.style.border = 'none';
-        xlsxUploadBtn.style.borderRadius = '5px';
-        xlsxUploadBtn.style.cursor = 'pointer';
+        // SharePoint data refresh functionality
+        const sharePointUrl = 'https://share.amazon.com/sites/WFM_eComm_ABI/_layouts/15/download.aspx?SourceUrl=%2Fsites%2FWFM%5FeComm%5FABI%2FShared%20Documents%2FWFMOAC%2FDailyInventory%2FWFMOAC%20Inventory%20Data%2Exlsx';
+        
+        function fetchSharePointData() {
+            console.log('🌐 Fetching data from SharePoint...');
+            
+            // Show loading feedback
+            const originalButtonText = refreshDataBtn.textContent;
+            refreshDataBtn.textContent = '🔄 Fetching...';
+            refreshDataBtn.disabled = true;
+            
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: sharePointUrl,
+                headers: {
+                    'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                },
+                responseType: 'arraybuffer',
+                withCredentials: true,
+                onload: function(response) {
+                    console.log('📡 SharePoint response status:', response.status);
+                    
+                    if (response.status === 200) {
+                        console.log('✅ SharePoint file downloaded successfully');
+                        handleSharePointData(response.response);
+                    } else if (response.status === 302 || response.status === 401) {
+                        // Authentication required - open in new tab for user to authenticate
+                        console.log('🔐 Authentication required, opening SharePoint in new tab...');
+                        window.open(sharePointUrl, '_blank');
+                        alert('🔐 Authentication required!\n\nA new tab has been opened to SharePoint. Please:\n1. Sign in if prompted\n2. The file should download automatically\n3. Come back and try "Refresh Data" again');
+                    } else {
+                        console.error('❌ Failed to fetch SharePoint file:', response);
+                        alert(`❌ Failed to fetch data from SharePoint.\n\nStatus: ${response.status}\nCheck console for details.`);
+                    }
+                    
+                    // Restore button state
+                    refreshDataBtn.textContent = originalButtonText;
+                    refreshDataBtn.disabled = false;
+                },
+                onerror: function(error) {
+                    console.error('❌ Error accessing SharePoint:', error);
+                    alert('❌ Error accessing SharePoint data.\n\nThis might be due to:\n- Network connectivity issues\n- Authentication problems\n- SharePoint access restrictions\n\nCheck console for details.');
+                    
+                    // Restore button state
+                    refreshDataBtn.textContent = originalButtonText;
+                    refreshDataBtn.disabled = false;
+                }
+            });
+        }
+        
+        async function handleSharePointData(arrayBuffer) {
+            try {
+                console.log('📊 Processing SharePoint data...');
+                
+                // Show processing message for large files
+                const processingAlert = document.createElement('div');
+                processingAlert.style.position = 'fixed';
+                processingAlert.style.top = '50%';
+                processingAlert.style.left = '50%';
+                processingAlert.style.transform = 'translate(-50%, -50%)';
+                processingAlert.style.background = '#fff';
+                processingAlert.style.border = '2px solid #007bff';
+                processingAlert.style.borderRadius = '8px';
+                processingAlert.style.padding = '20px';
+                processingAlert.style.zIndex = '10001';
+                processingAlert.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+                processingAlert.innerHTML = `
+                    <div style="text-align: center;">
+                        <div style="font-size: 16px; margin-bottom: 10px;">📊 Processing SharePoint data...</div>
+                        <div style="font-size: 14px; color: #666;">This may take a moment for large files</div>
+                    </div>
+                `;
+                document.body.appendChild(processingAlert);
+                
+                // Allow UI to update
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                const newItems = await parseXLSX(arrayBuffer);
+                
+                // Remove processing message
+                document.body.removeChild(processingAlert);
+                
+                // Update the item database
+                itemDatabase = newItems;
+                
+                // Save to persistent storage
+                saveItemDatabase();
+                
+                // Update UI
+                updateItemDatabaseStatus();
 
-        const xlsxFileInput = document.createElement('input');
-        xlsxFileInput.type = 'file';
-        xlsxFileInput.accept = '.xlsx';
-        xlsxFileInput.style.display = 'none';
-
-        xlsxUploadBtn.addEventListener('click', () => {
-            xlsxFileInput.click();
-        });
-
-        xlsxFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                handleXLSXUpload(file);
+                alert(`✅ Successfully loaded ${itemDatabase.length} items from SharePoint!\n\nData is now available for searching and has been saved locally.`);
+                
+            } catch (error) {
+                // Remove processing message if it exists
+                const processingAlert = document.querySelector('div[style*="Processing SharePoint data"]');
+                if (processingAlert) {
+                    document.body.removeChild(processingAlert.parentElement);
+                }
+                console.error('❌ Error processing SharePoint data:', error);
+                alert(`❌ Error processing SharePoint data: ${error.message}\n\nCheck console for details.`);
             }
-            // Reset the input so the same file can be selected again
-            xlsxFileInput.value = '';
-        });
+        }
+
+        // Create SharePoint data refresh button
+        const refreshDataBtn = document.createElement('button');
+        refreshDataBtn.textContent = '🔄 Refresh Data from SharePoint';
+        refreshDataBtn.style.padding = '10px';
+        refreshDataBtn.style.backgroundColor = '#20c997';
+        refreshDataBtn.style.color = '#fff';
+        refreshDataBtn.style.border = 'none';
+        refreshDataBtn.style.borderRadius = '5px';
+        refreshDataBtn.style.cursor = 'pointer';
+
+        refreshDataBtn.addEventListener('click', fetchSharePointData);
 
         // Create store switching dropdown
         const storeSelectContainer = document.createElement('div');
@@ -1804,13 +1910,12 @@
         contentContainer.appendChild(itemSearchContainer);
         
         contentContainer.appendChild(uploadBtn);
-        contentContainer.appendChild(xlsxUploadBtn);
+        contentContainer.appendChild(refreshDataBtn);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
-        contentContainer.appendChild(xlsxFileInput);
         document.body.appendChild(panel);
         
         // Initialize status after all UI elements are created
