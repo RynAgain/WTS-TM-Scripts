@@ -9,25 +9,26 @@
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
 // @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
-// @match        *://*.wholefoodsmarket.com/*
+// @match        https://*.wholefoodsmarket.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
 // @connect      share.amazon.com
-// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+// @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
+// @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @run-at       document-idle
 // ==/UserScript==
 
 (function () {
     'use strict';
-    
+
     // ULTRA-AGGRESSIVE VISIBILITY TEST - Multiple methods to ensure we see this
     console.log('🚨🚨🚨 WTS TOOLS SCRIPT LOADED - If you see this, the script is running! 🚨🚨🚨');
     console.error('🚨 WTS TOOLS ERROR LOG TEST - This should be RED and visible!');
     console.warn('🚨 WTS TOOLS WARN LOG TEST - This should be YELLOW and visible!');
     console.info('🚨 WTS TOOLS INFO LOG TEST - This should be BLUE and visible!');
-    
+
     // Try to create a visible alert as well
     try {
         // Create a temporary visual indicator
@@ -41,8 +42,8 @@
         indicator.style.padding = '10px';
         indicator.style.fontSize = '16px';
         indicator.style.fontWeight = 'bold';
-        indicator.textContent = '🚨 WTS TOOLS SCRIPT IS RUNNING! 🚨';
-        
+        //indicator.textContent = '🚨 WTS TOOLS SCRIPT IS RUNNING! 🚨';
+
         // Add to page immediately if body exists
         if (document.body) {
             document.body.appendChild(indicator);
@@ -55,11 +56,11 @@
     } catch (e) {
         console.error('Failed to create visual indicator:', e);
     }
-    
+
     console.log('🚨 Timestamp:', new Date().toISOString());
     console.log('🚨 User Agent:', navigator.userAgent);
     console.log('🚨 Tampermonkey Version Check:', typeof GM_info !== 'undefined' ? GM_info.version : 'GM_info not available');
-    
+
     // Enhanced debug logging for troubleshooting
     console.log('🚀 WTS Tools script starting...');
     console.log('📍 Current URL:', window.location.href);
@@ -67,14 +68,14 @@
     console.log('📍 Timestamp:', new Date().toISOString());
     console.log('📍 Body exists:', !!document.body);
     console.log('📍 Script run-at changed to document-idle for better DOM readiness');
-    
+
     // Test if we're on the right domain
     if (!window.location.hostname.includes('wholefoodsmarket.com')) {
         console.warn('⚠️ Script running on non-Whole Foods domain:', window.location.hostname);
     } else {
         console.log('✅ Script running on correct domain');
     }
-    
+
     // Simple test to verify script execution
     try {
         console.log('🧪 Testing basic functionality...');
@@ -83,20 +84,20 @@
             GM_getValue: typeof GM_getValue,
             GM_xmlhttpRequest: typeof GM_xmlhttpRequest
         });
-        
+
         // Test basic DOM access
         console.log('🧪 DOM access test:', {
             document: typeof document,
             body: !!document.body,
             querySelector: typeof document.querySelector
         });
-        
+
         console.log('✅ Basic functionality test passed');
     } catch (error) {
         console.error('❌ Basic functionality test failed:', error);
         alert('❌ WTS Tools script failed basic tests. Check console for details.');
     }
-    
+
     // Check if XLSX library is loaded
     if (typeof XLSX === 'undefined') {
         console.error('❌ XLSX library not loaded! Script may not work properly.');
@@ -113,11 +114,11 @@
     let lastUrl = window.location.href;
     let isInitialized = false;
     let initializationRetryTimeout = null;
-    
+
     // FIXED: Add interval tracking for proper cleanup
     let cardCounterInterval = null;
     let urlPollingInterval = null;
-    
+
     // FIXED: Add initialization guard to prevent overlapping runs
     let _initializing = false;
 
@@ -126,12 +127,26 @@
     let currentStoreInfo = null;
     let networkInterceptionActive = false;
 
+    // IndexedDB setup with Dexie
+    const db = new Dexie('wts_items');
+    // Primary key ++id, plus indexes you query on
+    db.version(1).stores({
+        items: '++id, asin, sku, store_tlc, store_acronym, store_name, item_nameLower'
+    });
+
+    // Request persistent storage to reduce eviction risk
+    if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().then(persisted => {
+            console.log('[WTS] Storage persisted:', persisted);
+        });
+    }
+
     function startNetworkInterception() {
         if (networkInterceptionActive) {
             console.log("🌐 Network interception already active");
             return;
         }
-        
+
         console.log("🌐 Starting network request interception for CSRF token capture...");
         console.log("📍 Timestamp:", new Date().toISOString());
         networkInterceptionActive = true;
@@ -152,19 +167,19 @@
         const originalFetch = window.fetch;
         window.fetch = function(url, options) {
             console.log("🌐 FETCH INTERCEPTOR DEBUG - Input type:", typeof url, url instanceof Request ? "Request object" : "String/other");
-            
+
             // Capture CSRF tokens
             if (options && options.headers) {
                 const headers = options.headers;
                 let csrfToken = null;
-                
+
                 // Check different header formats
                 if (headers['anti-csrftoken-a2z']) {
                     csrfToken = headers['anti-csrftoken-a2z'];
                 } else if (headers.get && typeof headers.get === 'function') {
                     csrfToken = headers.get('anti-csrftoken-a2z');
                 }
-                
+
                 if (csrfToken && csrfToken.length > 50) {
                     console.log("🎯 Captured CSRF token from fetch request:", csrfToken);
                     capturedCSRFToken = csrfToken;
@@ -172,10 +187,10 @@
                     GM_setValue('lastCapturedTimestamp', Date.now());
                 }
             }
-            
+
             // Intercept summary requests to capture store info
             const fetchPromise = originalFetch.apply(this, arguments);
-            
+
             // FIXED: Robust URL extraction that safely handles Request objects
             let urlString = '';
             try {
@@ -191,7 +206,7 @@
                 console.error("❌ FETCH INTERCEPTOR ERROR - Failed to extract URL:", error);
                 return fetchPromise; // Return early to prevent crash
             }
-            
+
             if (urlString && urlString.includes('summary')) {
                 console.log("🏪 Intercepting summary request:", urlString);
                 fetchPromise.then(response => {
@@ -209,7 +224,7 @@
                                 };
                                 GM_setValue('currentStoreInfo', JSON.stringify(currentStoreInfo));
                                 GM_setValue('storeInfoTimestamp', Date.now());
-                                
+
                                 // Update UI if it exists
                                 try {
                                     updateCurrentStoreDisplay();
@@ -225,7 +240,7 @@
                     console.log("Error processing summary response:", err);
                 });
             }
-            
+
             return fetchPromise;
         };
 
@@ -236,16 +251,16 @@
         const token = GM_getValue('lastCapturedCSRFToken', null);
         const timestamp = GM_getValue('lastCapturedTimestamp', 0);
         const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-        
+
         if (token && ageHours < 24) { // Token is less than 24 hours old
             console.log(`🎯 Using captured CSRF token (${ageHours.toFixed(1)}h old):`, token);
             return token;
         }
-        
+
         if (token) {
             console.log(`⚠️ Captured token is ${ageHours.toFixed(1)}h old, may be expired`);
         }
-        
+
         return null;
     }
 
@@ -253,7 +268,7 @@
         const storeInfo = GM_getValue('currentStoreInfo', null);
         const timestamp = GM_getValue('storeInfoTimestamp', 0);
         const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-        
+
         if (storeInfo && ageHours < 24) { // Store info is less than 24 hours old
             try {
                 const parsed = JSON.parse(storeInfo);
@@ -264,11 +279,11 @@
                 return null;
             }
         }
-        
+
         if (storeInfo) {
             console.log(`⚠️ Captured store info is ${ageHours.toFixed(1)}h old, may be expired`);
         }
-        
+
         return currentStoreInfo; // Return current session info if available
     }
 
@@ -276,14 +291,14 @@
     function handleScriptError(error, context) {
         console.error(`❌ WTS Tools Error in ${context}:`, error);
         console.error('Stack trace:', error.stack);
-        
+
         // Log additional context
         console.log('📍 Current URL:', window.location.href);
         console.log('📍 Document ready state:', document.readyState);
         console.log('📍 Panel exists:', !!wtsPanel);
         console.log('📍 Panel in DOM:', wtsPanel ? document.body.contains(wtsPanel) : false);
         console.log('📍 Initialization state:', isInitialized);
-        
+
         // Attempt recovery for certain errors
         if (context === 'initialization' && initializationAttempts < maxInitializationAttempts) {
             console.log('🔄 Attempting error recovery...');
@@ -296,30 +311,30 @@
     // Graceful cleanup on page unload
     function cleanup() {
         console.log('🧹 Cleaning up WTS Tools...');
-        
+
         if (persistenceCheckInterval) {
             clearInterval(persistenceCheckInterval);
             persistenceCheckInterval = null;
         }
-        
+
         if (initializationRetryTimeout) {
             clearTimeout(initializationRetryTimeout);
             initializationRetryTimeout = null;
         }
-        
+
         // FIXED: Clear tracked intervals to prevent memory leaks
         if (cardCounterInterval) {
             console.log('🧹 Clearing card counter interval:', cardCounterInterval);
             clearInterval(cardCounterInterval);
             cardCounterInterval = null;
         }
-        
+
         if (urlPollingInterval) {
             console.log('🧹 Clearing URL polling interval:', urlPollingInterval);
             clearInterval(urlPollingInterval);
             urlPollingInterval = null;
         }
-        
+
         isInitialized = false;
         wtsPanel = null;
     }
@@ -378,12 +393,12 @@
             console.log('🔧 Creating WTS Tools panel...');
             console.log('📍 Document ready state:', document.readyState);
             console.log('📍 Body element exists:', !!document.body);
-            
+
             // Ensure document body exists
             if (!document.body) {
                 throw new Error('Document body not available yet');
             }
-            
+
             let lastExtractedData = [];
             let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
             let itemDatabase = []; // Item database from XLSX: Array of item objects
@@ -415,7 +430,7 @@
 
         // Load existing mappings on initialization
         loadStoredMappings();
-        
+
 
         // CSV parsing function for store mapping
         function parseCSV(csvText) {
@@ -437,7 +452,7 @@
 
             for (let i = 1; i < lines.length; i++) {
                 const row = lines[i].split(',').map(col => col.trim().replace(/"/g, ''));
-                
+
                 if (row.length < Math.max(storeCodeIndex, storeIdIndex) + 1) {
                     errors.push(`Row ${i + 1}: Insufficient columns`);
                     continue;
@@ -477,13 +492,13 @@
             try {
                 console.log('📊 Starting XLSX parsing...');
                 const startTime = Date.now();
-                
+
                 const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                
+
                 // Look for the specific sheet "WFMOAC Inventory Data"
                 const targetSheetName = "WFMOAC Inventory Data";
                 let sheetName = targetSheetName;
-                
+
                 if (!workbook.SheetNames.includes(targetSheetName)) {
                     console.warn(`Sheet "${targetSheetName}" not found. Available sheets:`, workbook.SheetNames);
                     // Fallback to first sheet if target sheet not found
@@ -492,17 +507,17 @@
                         throw new Error('No sheets found in XLSX file');
                     }
                 }
-                
+
                 const worksheet = workbook.Sheets[sheetName];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                
+
                 if (jsonData.length < 2) {
                     throw new Error('XLSX file must contain at least a header row and one data row');
                 }
-                
+
                 const totalRows = jsonData.length - 1; // Exclude header
                 console.log(`📊 Processing ${totalRows} rows...`);
-                
+
                 // Warn about large datasets
                 if (totalRows > 100000) {
                     const proceed = confirm(`⚠️ Large dataset detected: ${totalRows} rows\n\nThis may take a while and could slow down your browser.\n\nDo you want to continue?`);
@@ -510,11 +525,11 @@
                         throw new Error('Processing cancelled by user');
                     }
                 }
-                
+
                 const headers = jsonData[0].map(h => h ? h.toString().trim() : '');
                 const requiredColumns = ['store_name', 'store_acronym', 'store_tlc', 'item_name', 'sku', 'asin'];
                 const columnIndices = {};
-                
+
                 // Map column headers to indices (case insensitive)
                 requiredColumns.forEach(col => {
                     const index = headers.findIndex(h => h.toLowerCase() === col.toLowerCase());
@@ -523,7 +538,7 @@
                     }
                     columnIndices[col] = index;
                 });
-                
+
                 // Optional columns
                 const optionalColumns = ['quantity', 'listing_status', 'event_date', 'sku_wo_chck_dgt', 'rnk', 'eod_our_price', 'offering_start_datetime', 'offering_end_datetime', 'merchant_customer_id', 'encrypted_merchant_i'];
                 optionalColumns.forEach(col => {
@@ -532,56 +547,57 @@
                         columnIndices[col] = index;
                     }
                 });
-                
+
                 const items = [];
                 const errors = [];
-                
+
                 // Process data in batches to prevent browser freezing
                 const BATCH_SIZE = 1000;
                 const totalBatches = Math.ceil((jsonData.length - 1) / BATCH_SIZE);
-                
+
                 console.log(`📊 Processing in ${totalBatches} batches of ${BATCH_SIZE} rows each...`);
-                
+
                 // Process batches with async delays
                 for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
                     const startRow = batchIndex * BATCH_SIZE + 1; // +1 to skip header
                     const endRow = Math.min(startRow + BATCH_SIZE, jsonData.length);
-                    
+
                     console.log(`📊 Processing batch ${batchIndex + 1}/${totalBatches} (rows ${startRow}-${endRow - 1})`);
-                    
+
                     for (let i = startRow; i < endRow; i++) {
                         const row = jsonData[i];
-                        
+
                         if (!row || row.length === 0) continue; // Skip empty rows
-                        
+
                         const item = {};
                         let hasError = false;
-                        
+
                         // Process required columns
                         requiredColumns.forEach(col => {
                             const value = row[columnIndices[col]];
                             if (value === undefined || value === null || value === '') {
+                                // Skip this item but continue processing others
                                 errors.push(`Row ${i + 1}: Missing required value for "${col}"`);
                                 hasError = true;
                                 return;
                             }
                             item[col] = value.toString().trim();
                         });
-                        
+
                         if (hasError) continue;
-                        
-                        // Validate ASIN format
+
+                        // Validate ASIN format - but allow processing to continue
                         if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
                             errors.push(`Row ${i + 1}: Invalid ASIN format "${item.asin}" (must be 10 alphanumeric characters)`);
-                            continue;
+                            // Don't skip the item, just log the error
                         }
-                        
-                        // Validate store_tlc format
+
+                        // Validate store_tlc format - but allow processing to continue
                         if (item.store_tlc && item.store_tlc.length !== 3) {
                             errors.push(`Row ${i + 1}: Invalid store_tlc format "${item.store_tlc}" (must be 3 characters)`);
-                            continue;
+                            // Don't skip the item, just log the error
                         }
-                        
+
                         // Process optional columns
                         optionalColumns.forEach(col => {
                             if (columnIndices[col] !== undefined) {
@@ -589,35 +605,37 @@
                                 item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
                             }
                         });
-                        
+
                         // Normalize data
                         item.asin = item.asin.toUpperCase();
                         item.store_tlc = item.store_tlc.toUpperCase();
-                        
+
                         items.push(item);
                     }
-                    
+
                     // Allow browser to breathe between batches for large datasets
                     if (totalRows > 50000 && batchIndex < totalBatches - 1) {
                         await new Promise(resolve => setTimeout(resolve, 10));
                     }
                 }
-                
+
                 const processingTime = (Date.now() - startTime) / 1000;
                 console.log(`✅ Processed ${items.length} items in ${processingTime.toFixed(2)} seconds`);
-                
-                if (errors.length > 5) {
-                    throw new Error(`Too many validation errors (${errors.length}). First 5 errors:\n${errors.slice(0, 5).join('\n')}`);
-                } else if (errors.length > 0) {
-                    console.warn('XLSX parsing warnings:', errors);
+
+                // Log validation errors but don't stop processing for large datasets
+                if (errors.length > 0) {
+                    console.warn(`XLSX parsing warnings (${errors.length} total):`, errors.slice(0, 10));
+                    if (errors.length > 100) {
+                        console.warn(`... and ${errors.length - 10} more validation errors (check data quality)`);
+                    }
                 }
-                
+
                 if (items.length === 0) {
                     throw new Error('No valid items found in the XLSX file');
                 }
-                
+
                 return items;
-                
+
             } catch (error) {
                 if (error.message.includes('Unsupported file')) {
                     throw new Error('Invalid XLSX file format. Please ensure the file is a valid Excel (.xlsx) file.');
@@ -626,161 +644,132 @@
             }
         }
 
-        // Save item database to storage with chunking for large datasets
-        function saveItemDatabase() {
+        // Save item database to IndexedDB with batching for performance
+        async function saveItemDatabase() {
             try {
-                console.log(`💾 Saving ${itemDatabase.length} items to storage...`);
+                console.log(`💾 Saving ${itemDatabase.length} items to IndexedDB...`);
                 const startTime = Date.now();
-                
-                const jsonString = JSON.stringify(itemDatabase);
-                const jsonSize = new Blob([jsonString]).size;
-                console.log(`📊 Database JSON size: ${(jsonSize / 1024 / 1024).toFixed(2)} MB`);
-                
-                // Check if data is too large for single storage (Tampermonkey limit is ~5MB per key)
-                const MAX_CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to be safe
-                
-                if (jsonSize > MAX_CHUNK_SIZE) {
-                    console.log('📦 Large dataset detected, using chunked storage...');
-                    
-                    // Clear any existing chunks
-                    let chunkIndex = 0;
-                    while (GM_getValue(`itemDatabase_chunk_${chunkIndex}`, null) !== null) {
-                        GM_deleteValue(`itemDatabase_chunk_${chunkIndex}`);
-                        chunkIndex++;
-                    }
-                    
-                    // Split into chunks
-                    const chunks = [];
-                    for (let i = 0; i < jsonString.length; i += MAX_CHUNK_SIZE) {
-                        chunks.push(jsonString.slice(i, i + MAX_CHUNK_SIZE));
-                    }
-                    
-                    // Save chunks
-                    chunks.forEach((chunk, index) => {
-                        GM_setValue(`itemDatabase_chunk_${index}`, chunk);
-                    });
-                    
-                    // Save metadata
-                    GM_setValue('itemDatabase_chunks', chunks.length);
-                    GM_setValue('itemDatabase_size', itemDatabase.length);
-                    GM_deleteValue('itemDatabase'); // Remove old single storage
-                    
-                    console.log(`✅ Saved ${chunks.length} chunks in ${(Date.now() - startTime)}ms`);
-                } else {
-                    // Small enough for single storage
-                    GM_setValue('itemDatabase', jsonString);
-                    GM_deleteValue('itemDatabase_chunks'); // Clean up any old chunks
-                    console.log(`✅ Saved single database in ${(Date.now() - startTime)}ms`);
+
+                // Clear existing data
+                await db.items.clear();
+
+                // Prepare data for IndexedDB with normalized fields
+                const toStore = itemDatabase.map(item => ({
+                    asin: (item.asin || '').toUpperCase(),
+                    sku: (item.sku || ''),
+                    store_tlc: (item.store_tlc || '').toUpperCase(),
+                    store_acronym: item.store_acronym || '',
+                    store_name: item.store_name || '',
+                    item_nameLower: (item.item_name || '').toLowerCase(),
+                    item_name: item.item_name || '',
+                    // Include optional fields if they exist
+                    quantity: item.quantity || '',
+                    listing_status: item.listing_status || '',
+                    event_date: item.event_date || '',
+                    sku_wo_chck_dgt: item.sku_wo_chck_dgt || '',
+                    rnk: item.rnk || '',
+                    eod_our_price: item.eod_our_price || '',
+                    offering_start_datetime: item.offering_start_datetime || '',
+                    offering_end_datetime: item.offering_end_datetime || '',
+                    merchant_customer_id: item.merchant_customer_id || '',
+                    encrypted_merchant_i: item.encrypted_merchant_i || ''
+                }));
+
+                // Bulk add in batches to keep UI responsive
+                const BATCH_SIZE = 5000;
+                for (let i = 0; i < toStore.length; i += BATCH_SIZE) {
+                    const batch = toStore.slice(i, i + BATCH_SIZE);
+                    await db.items.bulkAdd(batch);
+                    console.log(`📦 Saved batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(toStore.length / BATCH_SIZE)}`);
                 }
-                
+
+                // Save timestamp to GM storage (keep small metadata in GM)
                 GM_setValue('itemDatabaseTimestamp', Date.now());
-                
+
+                console.log(`✅ Saved ${toStore.length} items to IndexedDB in ${(Date.now() - startTime)}ms`);
+
             } catch (error) {
-                console.error('❌ Error saving item database:', error);
-                alert(`❌ Failed to save item database: ${error.message}\n\nThe database may be too large for storage. Try using a smaller dataset.`);
+                console.error('❌ Error saving item database to IndexedDB:', error);
+                alert(`❌ Failed to save item database: ${error.message}\n\nCheck console for details.`);
             }
         }
 
-        // Load item database from storage with chunking support
-        function loadItemDatabase() {
+        // Get database status without loading everything into memory
+        async function getItemDatabaseStatus() {
             try {
-                console.log('📂 Loading item database from storage...');
-                const startTime = Date.now();
-                
+                const count = await db.items.count();
                 const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
-                const chunkCount = GM_getValue('itemDatabase_chunks', 0);
                 
-                if (chunkCount > 0) {
-                    // Load chunked data
-                    console.log(`📦 Loading ${chunkCount} chunks...`);
-                    let jsonString = '';
-                    
-                    for (let i = 0; i < chunkCount; i++) {
-                        const chunk = GM_getValue(`itemDatabase_chunk_${i}`, '');
-                        if (!chunk) {
-                            throw new Error(`Missing chunk ${i} of ${chunkCount}`);
-                        }
-                        jsonString += chunk;
-                    }
-                    
-                    itemDatabase = JSON.parse(jsonString);
-                    console.log(`✅ Loaded ${itemDatabase.length} items from ${chunkCount} chunks in ${(Date.now() - startTime)}ms`);
-                } else {
-                    // Load single storage (legacy or small datasets)
-                    const storedData = GM_getValue('itemDatabase', '[]');
-                    itemDatabase = JSON.parse(storedData);
-                    
-                    if (itemDatabase.length > 0) {
-                        console.log(`✅ Loaded ${itemDatabase.length} items from single storage in ${(Date.now() - startTime)}ms`);
-                    }
-                }
-                
-                if (itemDatabase.length > 0) {
-                    const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-                    console.log(`📊 Database age: ${ageHours.toFixed(1)} hours`);
-                }
-                
+                return {
+                    count,
+                    timestamp,
+                    ageHours: timestamp ? (Date.now() - timestamp) / (1000 * 60 * 60) : null
+                };
             } catch (error) {
-                console.error('❌ Error loading item database:', error);
-                console.log('🔄 Resetting item database due to load error');
-                itemDatabase = [];
-                
-                // Clean up corrupted storage
-                GM_deleteValue('itemDatabase');
-                GM_deleteValue('itemDatabase_chunks');
-                let chunkIndex = 0;
-                while (GM_getValue(`itemDatabase_chunk_${chunkIndex}`, null) !== null) {
-                    GM_deleteValue(`itemDatabase_chunk_${chunkIndex}`);
-                    chunkIndex++;
-                }
+                console.error('❌ Error getting database status:', error);
+                return { count: 0, timestamp: 0, ageHours: null };
             }
         }
 
-        // Search items in database with performance optimizations
-        function searchItems(query, searchType = 'all') {
-            if (!query || itemDatabase.length === 0) return [];
-            
-            const searchTerm = query.toLowerCase().trim();
-            const results = [];
-            const MAX_RESULTS = 50; // Limit results for performance
-            
-            // For large datasets, stop searching once we have enough results
-            for (let i = 0; i < itemDatabase.length && results.length < MAX_RESULTS; i++) {
-                const item = itemDatabase[i];
-                let matches = false;
-                
+        // Legacy function for compatibility - now just sets itemDatabase to empty array
+        function loadItemDatabase() {
+            console.log('📂 Legacy loadItemDatabase called - using IndexedDB instead');
+            itemDatabase = []; // Don't load everything into memory anymore
+        }
+
+        // Search items using IndexedDB with fast indexes
+        async function searchItems(query, searchType = 'all', currentStoreTLC = null, limit = 50) {
+            const q = (query || '').trim();
+            if (!q) return [];
+            const qU = q.toUpperCase();
+            const qL = q.toLowerCase();
+
+            let coll;
+
+            try {
                 switch (searchType) {
                     case 'asin':
-                        matches = item.asin && item.asin.toLowerCase().includes(searchTerm);
-                        break;
-                    case 'name':
-                        matches = item.item_name && item.item_name.toLowerCase().includes(searchTerm);
+                        // exact or prefix: use index
+                        coll = db.items.where('asin').startsWith(qU);
                         break;
                     case 'sku':
-                        matches = item.sku && item.sku.toLowerCase().includes(searchTerm);
+                        coll = db.items.where('sku').startsWith(q);
                         break;
                     case 'store':
-                        matches = (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
-                                 (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
-                                 (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
+                        // fast filter on indexed store_tlc first; acronyms/names can be fallback
+                        coll = db.items.where('store_tlc').startsWith(qU);
                         break;
-                    case 'all':
+                    case 'name':
+                        // substring: no native index; do a filtered scan on item_nameLower with contains
+                        coll = db.items.filter(it => it.item_nameLower.includes(qL));
+                        break;
                     default:
-                        matches = (item.asin && item.asin.toLowerCase().includes(searchTerm)) ||
-                                 (item.item_name && item.item_name.toLowerCase().includes(searchTerm)) ||
-                                 (item.sku && item.sku.toLowerCase().includes(searchTerm)) ||
-                                 (item.store_name && item.store_name.toLowerCase().includes(searchTerm)) ||
-                                 (item.store_acronym && item.store_acronym.toLowerCase().includes(searchTerm)) ||
-                                 (item.store_tlc && item.store_tlc.toLowerCase().includes(searchTerm));
-                        break;
+                        // mixed mode: try indexed fields first, then merge with limited name contains
+                        const asinHits = await db.items.where('asin').startsWith(qU).limit(limit).toArray();
+                        if (asinHits.length >= limit) return asinHits;
+                        const skuHits = await db.items.where('sku').startsWith(q).limit(limit - asinHits.length).toArray();
+                        let results = asinHits.concat(skuHits);
+                        if (results.length < limit) {
+                            const nameHits = await db.items
+                                .filter(it => it.item_nameLower.includes(qL))
+                                .limit(limit - results.length).toArray();
+                            results = results.concat(nameHits);
+                        }
+                        if (currentStoreTLC) {
+                            results = results.filter(r => r.store_tlc === currentStoreTLC);
+                        }
+                        return results.slice(0, limit);
                 }
-                
-                if (matches) {
-                    results.push(item);
-                }
+
+                // Apply store filter and cap
+                let arr = await coll.limit(limit * 2).toArray();
+                if (currentStoreTLC) arr = arr.filter(r => r.store_tlc === currentStoreTLC);
+                return arr.slice(0, limit);
+
+            } catch (error) {
+                console.error('❌ Error searching IndexedDB:', error);
+                return [];
             }
-            
-            return results;
         }
 
         // Store switching functionality
@@ -797,7 +786,7 @@
                 console.log("Page readyState:", document.readyState);
                 console.log("URL:", window.location.href);
                 console.log("Timestamp:", new Date().toISOString());
-                
+
                 // Method 1: Meta tag approach
                 console.log("\n--- Method 1: Meta Tag Search ---");
                 const metaToken = document.querySelector('meta[name="anti-csrftoken-a2z"]');
@@ -815,7 +804,7 @@
                 console.log("\n--- Method 2: Script Content Search ---");
                 const scripts = document.querySelectorAll('script');
                 console.log("Total scripts found:", scripts.length);
-                
+
                 const regexPatterns = [
                     {
                         name: "Standard object notation",
@@ -838,16 +827,16 @@
                         pattern: /(?:var|let|const)\s+[^=]*=\s*[^{]*["']anti-csrftoken-a2z["']\s*:\s*["']([^"']+)["']/g
                     }
                 ];
-                
+
                 for (let i = 0; i < scripts.length; i++) {
                     const script = scripts[i];
                     const content = script.textContent || script.innerText;
-                    
+
                     if (content.includes('anti-csrftoken-a2z')) {
                         console.log(`Script ${i + 1} contains 'anti-csrftoken-a2z'`);
                         console.log("Script source:", script.src || "inline");
                         console.log("Content preview:", content.substring(0, 200) + "...");
-                        
+
                         for (const {name, pattern} of regexPatterns) {
                             const matches = [...content.matchAll(pattern)];
                             if (matches.length > 0) {
@@ -875,7 +864,7 @@
                 } else {
                     console.log("❌ No element found with data-anti-csrftoken-a2z attribute");
                 }
-                
+
                 // Method 4: Window object search
                 console.log("\n--- Method 4: Window Object Search ---");
                 const windowChecks = [
@@ -892,7 +881,7 @@
                         check: () => window['anti-csrftoken-a2z']
                     }
                 ];
-                
+
                 for (const {name, check} of windowChecks) {
                     try {
                         const token = check();
@@ -913,7 +902,7 @@
                 console.log("\n--- Method 5: Hidden Input Search ---");
                 const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
                 console.log("Hidden inputs found:", hiddenInputs.length);
-                
+
                 for (const input of hiddenInputs) {
                     if (input.name && (input.name.includes('csrf') || input.name.includes('token'))) {
                         console.log("Found potential CSRF input:", input.name, "=", input.value);
@@ -934,7 +923,7 @@
                 console.log("2. Try again after a delay");
                 console.log("3. Check browser network tab for token in requests");
                 console.log("4. Inspect page source manually for token location");
-                
+
                 return null;
             }
 
@@ -950,39 +939,39 @@
             // Enhanced token extraction with network capture, retry logic and fallback
             async function extractTokenWithRetry(maxRetries = 3, delayMs = 1000) {
                 console.log(`\n🔄 CSRF Token Extraction Starting...`);
-                
+
                 // Priority 1: Check for recently captured token from network requests
                 const capturedToken = getCapturedToken();
                 if (capturedToken) {
                     console.log("✅ Using recently captured token from network requests");
                     return capturedToken;
                 }
-                
+
                 // Priority 2: Try DOM extraction with retries
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     console.log(`\n🔄 DOM Extraction Attempt ${attempt}/${maxRetries}`);
-                    
+
                     const token = extractCSRFToken();
                     if (token) {
                         console.log(`✅ Token found via DOM extraction on attempt ${attempt}`);
                         return token;
                     }
-                    
+
                     if (attempt < maxRetries) {
                         console.log(`⏳ Retrying DOM extraction in ${delayMs}ms...`);
                         await new Promise(resolve => setTimeout(resolve, delayMs));
                     }
                 }
-                
+
                 console.log(`❌ All ${maxRetries} DOM extraction attempts failed`);
-                
+
                 // Priority 3: Check if fallback is enabled
                 const useFallback = GM_getValue('useFallbackCSRF', true);
                 if (useFallback) {
                     console.log("🔄 Attempting fallback token...");
                     return getFallbackToken();
                 }
-                
+
                 return null;
             }
 
@@ -1033,7 +1022,7 @@
                 // Check if the request was successful
                 if (response.ok) {
                     alert(`✅ Successfully switched to store ${storeCode} (ID: ${storeId})`);
-                    
+
                     // Wait a moment for the server to process the change, then refresh
                     setTimeout(() => {
                         window.location.reload();
@@ -1044,7 +1033,7 @@
 
             } catch (error) {
                 console.error('Store switch error:', error);
-                
+
                 // Provide user-friendly error messages
                 let errorMessage = '❌ Failed to switch store. ';
                 if (error.name === 'TypeError' && error.message.includes('fetch')) {
@@ -1054,7 +1043,7 @@
                 } else {
                     errorMessage += 'Please try again or refresh the page.';
                 }
-                
+
                 alert(errorMessage);
             } finally {
                 // Restore button state
@@ -1080,7 +1069,7 @@
                 try {
                     const csvText = e.target.result;
                     const newMappings = parseCSV(csvText);
-                    
+
                     // Update the store mapping data
                     storeMappingData.clear();
                     newMappings.forEach((storeId, storeCode) => {
@@ -1111,7 +1100,7 @@
 
         // Load saved panel position or use default
         const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
-        
+
         const panel = document.createElement('div');
         panel.id = 'wts-panel'; // FIXED: Add unique ID for reliable detection
         panel.style.position = 'fixed';
@@ -1171,47 +1160,47 @@
             const rect = panel.getBoundingClientRect();
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
-            
+
             // Visual feedback
             panel.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
             panel.style.transform = 'scale(1.02)';
             dragHeader.style.background = '#dee2e6';
             document.body.style.cursor = 'move';
-            
+
             e.preventDefault();
         };
 
         const handleMouseMove = (e) => {
             if (!isDragging) return;
-            
+
             let newX = e.clientX - dragOffset.x;
             let newY = e.clientY - dragOffset.y;
-            
+
             // Boundary constraints
             const panelRect = panel.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
-            
+
             // Keep panel within viewport bounds
             newX = Math.max(0, Math.min(newX, viewportWidth - panelRect.width));
             newY = Math.max(0, Math.min(newY, viewportHeight - panelRect.height));
-            
+
             panel.style.left = newX + 'px';
             panel.style.top = newY + 'px';
-            
+
             e.preventDefault();
         };
 
         const handleMouseUp = () => {
             if (!isDragging) return;
-            
+
             isDragging = false;
-            
+
             // Save position
             const rect = panel.getBoundingClientRect();
             const position = { x: rect.left, y: rect.top };
             GM_setValue('wts_panel_position', position);
-            
+
             // Reset visual feedback
             panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
             panel.style.transform = 'scale(1)';
@@ -1229,10 +1218,10 @@
             const rect = panel.getBoundingClientRect();
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
-            
+
             let newX = rect.left;
             let newY = rect.top;
-            
+
             // Adjust position if panel is outside viewport
             if (rect.right > viewportWidth) {
                 newX = viewportWidth - rect.width;
@@ -1240,10 +1229,10 @@
             if (rect.bottom > viewportHeight) {
                 newY = viewportHeight - rect.height;
             }
-            
+
             newX = Math.max(0, newX);
             newY = Math.max(0, newY);
-            
+
             if (newX !== rect.left || newY !== rect.top) {
                 panel.style.left = newX + 'px';
                 panel.style.top = newY + 'px';
@@ -1325,15 +1314,15 @@
 
         // SharePoint data refresh functionality
         const sharePointUrl = 'https://share.amazon.com/sites/WFM_eComm_ABI/_layouts/15/download.aspx?SourceUrl=%2Fsites%2FWFM%5FeComm%5FABI%2FShared%20Documents%2FWFMOAC%2FDailyInventory%2FWFMOAC%20Inventory%20Data%2Exlsx';
-        
+
         function fetchSharePointData() {
             console.log('🌐 Fetching data from SharePoint...');
-            
+
             // Show loading feedback
             const originalButtonText = refreshDataBtn.textContent;
             refreshDataBtn.textContent = '🔄 Fetching...';
             refreshDataBtn.disabled = true;
-            
+
             GM_xmlhttpRequest({
                 method: 'GET',
                 url: sharePointUrl,
@@ -1344,7 +1333,7 @@
                 withCredentials: true,
                 onload: function(response) {
                     console.log('📡 SharePoint response status:', response.status);
-                    
+
                     if (response.status === 200) {
                         console.log('✅ SharePoint file downloaded successfully');
                         handleSharePointData(response.response);
@@ -1357,7 +1346,7 @@
                         console.error('❌ Failed to fetch SharePoint file:', response);
                         alert(`❌ Failed to fetch data from SharePoint.\n\nStatus: ${response.status}\nCheck console for details.`);
                     }
-                    
+
                     // Restore button state
                     refreshDataBtn.textContent = originalButtonText;
                     refreshDataBtn.disabled = false;
@@ -1365,18 +1354,18 @@
                 onerror: function(error) {
                     console.error('❌ Error accessing SharePoint:', error);
                     alert('❌ Error accessing SharePoint data.\n\nThis might be due to:\n- Network connectivity issues\n- Authentication problems\n- SharePoint access restrictions\n\nCheck console for details.');
-                    
+
                     // Restore button state
                     refreshDataBtn.textContent = originalButtonText;
                     refreshDataBtn.disabled = false;
                 }
             });
         }
-        
+
         async function handleSharePointData(arrayBuffer) {
             try {
                 console.log('📊 Processing SharePoint data...');
-                
+
                 // Show processing message for large files
                 const processingAlert = document.createElement('div');
                 processingAlert.style.position = 'fixed';
@@ -1396,12 +1385,12 @@
                     </div>
                 `;
                 document.body.appendChild(processingAlert);
-                
+
                 // Allow UI to update
                 await new Promise(resolve => setTimeout(resolve, 100));
-                
+
                 const newItems = await parseXLSX(arrayBuffer);
-                
+
                 // Remove processing message
                 // FIXED: Safe processing message removal
                 try {
@@ -1412,18 +1401,18 @@
                 } catch (removeError) {
                     console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
                 }
-                
+
                 // Update the item database
                 itemDatabase = newItems;
-                
+
                 // Save to persistent storage
                 saveItemDatabase();
-                
+
                 // Update UI
                 updateItemDatabaseStatus();
 
                 alert(`✅ Successfully loaded ${itemDatabase.length} items from SharePoint!\n\nData is now available for searching and has been saved locally.`);
-                
+
             } catch (error) {
                 // Remove processing message if it exists
                 console.log("🐛 OVERLAY REMOVAL DEBUG - Error handler attempting to remove processing overlay");
@@ -1552,12 +1541,12 @@
 
             const currentFallbackToken = GM_getValue('fallbackCSRFToken', 'g8vLu/dZWzjCsJDFVrLrpFVhPtr6MUjMo2ijQsM2pdUFAAAAAQAAAABodo6GcmF3AAAAACr/Igfie4qiUf9rqj+gAw==');
             const useFallback = GM_getValue('useFallbackCSRF', true);
-            
+
             // Get captured token info
             const capturedToken = GM_getValue('lastCapturedCSRFToken', null);
             const capturedTimestamp = GM_getValue('lastCapturedTimestamp', 0);
             const capturedAge = capturedTimestamp ? (Date.now() - capturedTimestamp) / (1000 * 60 * 60) : null;
-            
+
             let capturedTokenStatus = '';
             if (capturedToken) {
                 const ageText = capturedAge < 1 ? `${Math.round(capturedAge * 60)}m` : `${capturedAge.toFixed(1)}h`;
@@ -1580,9 +1569,9 @@
 
             modalContent.innerHTML = `
                 <h3 style="margin-top: 0;">CSRF Token Settings</h3>
-                
+
                 ${capturedTokenStatus}
-                
+
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px;">
                         <input type="checkbox" id="useFallbackCheckbox" ${useFallback ? 'checked' : ''}>
@@ -1590,19 +1579,19 @@
                     </label>
                     <small style="color: #666;">When enabled, uses the fallback token if network capture and DOM extraction both fail</small>
                 </div>
-                
+
                 <div style="margin-bottom: 15px;">
                     <label style="display: block; margin-bottom: 5px;">Fallback CSRF Token:</label>
                     <textarea id="fallbackTokenInput" style="width: 100%; height: 80px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px; box-sizing: border-box;">${currentFallbackToken}</textarea>
                     <small style="color: #666;">Backup token used when network capture and DOM extraction fail. Keep this updated!</small>
                 </div>
-                
+
                 <div style="margin-bottom: 15px;">
                     <button id="resetTokenBtn" style="padding: 8px 12px; background: #ffc107; color: #000; border: none; border-radius: 4px; cursor: pointer;">Reset to Default</button>
                     <button id="testTokenBtn" style="padding: 8px 12px; background: #17a2b8; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-left: 8px;">Test Token Format</button>
                     <button id="clearCapturedBtn" style="padding: 8px 12px; background: #dc3545; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-left: 8px;">Clear Captured</button>
                 </div>
-                
+
                 <div style="text-align: right;">
                     <button id="cancelBtn" style="padding: 8px 12px; background: #6c757d; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 8px;">Cancel</button>
                     <button id="saveBtn" style="padding: 8px 12px; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer;">Save</button>
@@ -1638,15 +1627,15 @@
             document.getElementById('saveBtn').addEventListener('click', () => {
                 const newToken = document.getElementById('fallbackTokenInput').value.trim();
                 const usesFallback = document.getElementById('useFallbackCheckbox').checked;
-                
+
                 if (newToken && !/^[A-Za-z0-9+/]+=*$/.test(newToken)) {
                     alert('❌ Invalid token format. Token should be base64 encoded.');
                     return;
                 }
-                
+
                 GM_setValue('fallbackCSRFToken', newToken);
                 GM_setValue('useFallbackCSRF', usesFallback);
-                
+
                 alert('✅ CSRF settings saved successfully');
                 document.body.removeChild(modal);
             });
@@ -1673,7 +1662,8 @@
         debugBtn.style.fontSize = '12px';
         debugBtn.style.marginTop = '4px';
 
-        debugBtn.addEventListener('click', () => {
+        debugBtn.addEventListener('click', async () => {
+            const status = await getItemDatabaseStatus();
             const debugInfo = {
                 timestamp: new Date().toISOString(),
                 url: window.location.href,
@@ -1684,27 +1674,63 @@
                 initAttempts: initializationAttempts,
                 networkInterceptionActive: networkInterceptionActive,
                 storeMappings: storeMappingData.size,
-                itemDatabase: itemDatabase.length,
+                itemDatabaseCount: status.count,
                 capturedToken: !!getCapturedToken(),
                 storeInfo: getCurrentStoreInfo()
             };
-            
+
             console.log('🐛 WTS Tools Debug Info:', debugInfo);
-            
+
             const debugText = Object.entries(debugInfo)
                 .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
                 .join('\n');
-                
+
             alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
+        });
+
+        // Create IndexedDB reset button
+        const resetDbBtn = document.createElement('button');
+        resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
+        resetDbBtn.style.padding = '8px';
+        resetDbBtn.style.backgroundColor = '#dc3545';
+        resetDbBtn.style.color = '#fff';
+        resetDbBtn.style.border = 'none';
+        resetDbBtn.style.borderRadius = '4px';
+        resetDbBtn.style.cursor = 'pointer';
+        resetDbBtn.style.fontSize = '12px';
+        resetDbBtn.style.marginTop = '4px';
+
+        resetDbBtn.addEventListener('click', async () => {
+            if (!confirm('Delete the saved item database?\n\nThis will clear all items from IndexedDB. You can reload data from SharePoint afterwards.')) return;
+            
+            try {
+                resetDbBtn.textContent = '🔄 Clearing...';
+                resetDbBtn.disabled = true;
+                
+                await db.delete(); // drops database
+                await db.open();   // recreate schema
+                
+                // Clear timestamp
+                GM_deleteValue('itemDatabaseTimestamp');
+                
+                await updateItemDatabaseStatus();
+                alert('✅ Item DB cleared successfully');
+            } catch (error) {
+                console.error('❌ Error clearing IndexedDB:', error);
+                alert(`❌ Error clearing database: ${error.message}`);
+            } finally {
+                resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
+                resetDbBtn.disabled = false;
+            }
         });
 
         // Function to update store dropdown options
         const updateStoreDropdown = () => {
             storeSelect.innerHTML = '<option value="">Select a store...</option>';
-            
+
             // Sort store codes alphabetically
             const sortedStores = Array.from(storeMappingData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-            
+
             sortedStores.forEach(([storeCode, storeId]) => {
                 const option = document.createElement('option');
                 option.value = storeCode;
@@ -1727,28 +1753,33 @@
             }
         };
 
-        // Function to update item database status and UI visibility
-        const updateItemDatabaseStatus = () => {
-            if (itemDatabase.length === 0) {
-                itemDatabaseStatusDiv.textContent = 'No item database loaded';
-                itemDatabaseStatusDiv.style.color = '#666';
-                // Only hide search container if it exists
-                if (typeof itemSearchContainer !== 'undefined') {
-                    itemSearchContainer.style.display = 'none';
-                }
-            } else {
-                const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
-                const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
-                const ageText = ageHours < 1 ? `${Math.round(ageHours * 60)}m` : `${ageHours.toFixed(1)}h`;
+        // Function to update item database status using IndexedDB count
+        const updateItemDatabaseStatus = async () => {
+            try {
+                const status = await getItemDatabaseStatus();
                 
-                itemDatabaseStatusDiv.textContent = `${itemDatabase.length} items loaded (${ageText} ago)`;
-                itemDatabaseStatusDiv.style.color = '#28a745';
-                // Only show search container if it exists
-                if (typeof itemSearchContainer !== 'undefined') {
-                    itemSearchContainer.style.display = 'block';
-                    // Update current store display when database is loaded
-                    updateCurrentStoreDisplay();
+                if (status.count === 0) {
+                    itemDatabaseStatusDiv.textContent = 'No item database loaded';
+                    itemDatabaseStatusDiv.style.color = '#666';
+                    // Only hide search container if it exists
+                    if (typeof itemSearchContainer !== 'undefined') {
+                        itemSearchContainer.style.display = 'none';
+                    }
+                } else {
+                    const ageText = status.ageHours < 1 ? `${Math.round(status.ageHours * 60)}m` : `${status.ageHours.toFixed(1)}h`;
+                    itemDatabaseStatusDiv.textContent = `${status.count.toLocaleString()} items loaded (${ageText} ago)`;
+                    itemDatabaseStatusDiv.style.color = '#28a745';
+                    // Only show search container if it exists
+                    if (typeof itemSearchContainer !== 'undefined') {
+                        itemSearchContainer.style.display = 'block';
+                        // Update current store display when database is loaded
+                        updateCurrentStoreDisplay();
+                    }
                 }
+            } catch (error) {
+                console.error('❌ Error updating database status:', error);
+                itemDatabaseStatusDiv.textContent = 'Database status error';
+                itemDatabaseStatusDiv.style.color = '#dc3545';
             }
         };
 
@@ -1759,11 +1790,11 @@
 
         contentContainer.appendChild(exportBtn);
         contentContainer.appendChild(refreshBtn);
-        
+
         // ASIN Input Feature
         const asinInputContainer = document.createElement('div');
         asinInputContainer.style.marginTop = '8px';
-        
+
         const asinInput = document.createElement('input');
         asinInput.type = 'text';
         asinInput.placeholder = 'Enter ASIN (e.g., B08N5WRWNW)';
@@ -1774,7 +1805,7 @@
         asinInput.style.fontSize = '12px';
         asinInput.style.boxSizing = 'border-box';
         asinInput.style.marginBottom = '4px';
-        
+
         const goToItemBtn = document.createElement('button');
         goToItemBtn.textContent = '🔗 Go to Item';
         goToItemBtn.style.padding = '10px';
@@ -1784,46 +1815,46 @@
         goToItemBtn.style.borderRadius = '5px';
         goToItemBtn.style.cursor = 'pointer';
         goToItemBtn.style.width = '100%';
-        
+
         // ASIN validation function
         function validateASIN(asin) {
             // Remove whitespace and convert to uppercase
             const cleanASIN = asin.trim().toUpperCase();
-            
+
             // Check if ASIN is exactly 10 characters and alphanumeric
             const asinRegex = /^[A-Z0-9]{10}$/;
             return asinRegex.test(cleanASIN);
         }
-        
+
         // Navigation function
         function navigateToItem(asin) {
             const cleanASIN = asin.trim().toUpperCase();
-            
+
             if (!validateASIN(cleanASIN)) {
                 alert('❌ Invalid ASIN format. ASINs must be exactly 10 alphanumeric characters (e.g., B08N5WRWNW)');
                 return;
             }
-            
+
             // Show loading feedback
             const originalButtonText = goToItemBtn.textContent;
             goToItemBtn.textContent = '🔄 Opening...';
             goToItemBtn.disabled = true;
-            
+
             try {
                 // Construct Whole Foods item URL
                 const itemURL = `https://www.wholefoodsmarket.com/name/dp/${cleanASIN}`;
-                
+
                 // Open in new tab
                 window.open(itemURL, '_blank');
-                
+
                 // Clear input after successful navigation
                 asinInput.value = '';
-                
+
                 // Provide success feedback
                 setTimeout(() => {
                     alert(`✅ Opened item page for ASIN: ${cleanASIN}`);
                 }, 500);
-                
+
             } catch (error) {
                 console.error('Navigation error:', error);
                 alert('❌ Failed to open item page. Please try again.');
@@ -1835,7 +1866,7 @@
                 }, 1000);
             }
         }
-        
+
         // Event listeners
         goToItemBtn.addEventListener('click', () => {
             const asin = asinInput.value;
@@ -1846,7 +1877,7 @@
             }
             navigateToItem(asin);
         });
-        
+
         // Allow Enter key to trigger navigation
         asinInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -1858,22 +1889,22 @@
                 navigateToItem(asin);
             }
         });
-        
+
         asinInputContainer.appendChild(asinInput);
         asinInputContainer.appendChild(goToItemBtn);
         contentContainer.appendChild(asinInputContainer);
-        
+
         // Item Search Feature
         const itemSearchContainer = document.createElement('div');
         itemSearchContainer.style.marginTop = '8px';
         itemSearchContainer.style.display = 'none'; // Hidden by default until database is loaded
-        
+
         const itemSearchLabel = document.createElement('div');
         itemSearchLabel.textContent = 'Search Items:';
         itemSearchLabel.style.fontSize = '12px';
         itemSearchLabel.style.color = '#333';
         itemSearchLabel.style.marginBottom = '4px';
-        
+
         // Current store display
         const currentStoreDisplayDiv = document.createElement('div');
         currentStoreDisplayDiv.style.fontSize = '11px';
@@ -1884,29 +1915,29 @@
         currentStoreDisplayDiv.style.border = '1px solid #dee2e6';
         currentStoreDisplayDiv.style.borderRadius = '4px';
         currentStoreDisplayDiv.textContent = 'Store info not available';
-        
+
         // Store filter toggle
         const storeFilterContainer = document.createElement('div');
         storeFilterContainer.style.marginBottom = '4px';
         storeFilterContainer.style.display = 'flex';
         storeFilterContainer.style.alignItems = 'center';
         storeFilterContainer.style.gap = '8px';
-        
+
         const storeFilterCheckbox = document.createElement('input');
         storeFilterCheckbox.type = 'checkbox';
         storeFilterCheckbox.id = 'storeFilterCheckbox';
         storeFilterCheckbox.checked = false;
-        
+
         const storeFilterLabel = document.createElement('label');
         storeFilterLabel.htmlFor = 'storeFilterCheckbox';
         storeFilterLabel.textContent = 'Filter to current store only';
         storeFilterLabel.style.fontSize = '11px';
         storeFilterLabel.style.color = '#666';
         storeFilterLabel.style.cursor = 'pointer';
-        
+
         storeFilterContainer.appendChild(storeFilterCheckbox);
         storeFilterContainer.appendChild(storeFilterLabel);
-        
+
         const searchTypeSelect = document.createElement('select');
         searchTypeSelect.style.width = '100%';
         searchTypeSelect.style.padding = '6px';
@@ -1914,7 +1945,7 @@
         searchTypeSelect.style.border = '1px solid #ccc';
         searchTypeSelect.style.fontSize = '12px';
         searchTypeSelect.style.marginBottom = '4px';
-        
+
         const searchOptions = [
             { value: 'all', text: 'Search All Fields' },
             { value: 'asin', text: 'Search by ASIN' },
@@ -1922,14 +1953,14 @@
             { value: 'sku', text: 'Search by SKU' },
             { value: 'store', text: 'Search by Store' }
         ];
-        
+
         searchOptions.forEach(option => {
             const optionElement = document.createElement('option');
             optionElement.value = option.value;
             optionElement.textContent = option.text;
             searchTypeSelect.appendChild(optionElement);
         });
-        
+
         const itemSearchInput = document.createElement('input');
         itemSearchInput.type = 'text';
         itemSearchInput.placeholder = 'Enter search term...';
@@ -1940,7 +1971,7 @@
         itemSearchInput.style.fontSize = '12px';
         itemSearchInput.style.boxSizing = 'border-box';
         itemSearchInput.style.marginBottom = '4px';
-        
+
         const searchResultsContainer = document.createElement('div');
         searchResultsContainer.style.maxHeight = '200px';
         searchResultsContainer.style.overflowY = 'auto';
@@ -1948,33 +1979,33 @@
         searchResultsContainer.style.borderRadius = '4px';
         searchResultsContainer.style.backgroundColor = '#f8f9fa';
         searchResultsContainer.style.display = 'none';
-        
-        // Search functionality
-        function performSearch() {
+
+        // Search functionality - now async
+        async function performSearch() {
             const query = itemSearchInput.value.trim();
             const searchType = searchTypeSelect.value;
-            
+
             if (!query) {
                 searchResultsContainer.style.display = 'none';
                 return;
             }
-            
-            let results = searchItems(query, searchType);
-            
-            // Apply store filtering if enabled
-            if (storeFilterCheckbox.checked) {
-                const currentStoreTLC = getCurrentStoreTLC();
-                if (currentStoreTLC) {
-                    results = results.filter(item => item.store_tlc === currentStoreTLC);
-                }
+
+            // Get current store for filtering
+            const currentStoreTLC = storeFilterCheckbox.checked ? getCurrentStoreTLC() : null;
+
+            try {
+                const results = await searchItems(query, searchType, currentStoreTLC);
+                displaySearchResults(results);
+            } catch (error) {
+                console.error('❌ Search error:', error);
+                searchResultsContainer.innerHTML = '<div style="padding: 8px; color: #dc3545; text-align: center;">Search error occurred</div>';
+                searchResultsContainer.style.display = 'block';
             }
-            
-            displaySearchResults(results);
         }
-        
+
         function displaySearchResults(results) {
             searchResultsContainer.innerHTML = '';
-            
+
             if (results.length === 0) {
                 const noResults = document.createElement('div');
                 noResults.textContent = 'No items found';
@@ -1985,41 +2016,41 @@
                 searchResultsContainer.style.display = 'block';
                 return;
             }
-            
+
             // Limit results to first 10 for performance
             const limitedResults = results.slice(0, 10);
-            
+
             const currentStoreTLC = getCurrentStoreTLC();
-            
+
             limitedResults.forEach(item => {
                 const resultItem = document.createElement('div');
                 resultItem.style.padding = '8px';
                 resultItem.style.borderBottom = '1px solid #dee2e6';
                 resultItem.style.cursor = 'pointer';
                 resultItem.style.fontSize = '11px';
-                
+
                 // Highlight current store items
                 const isCurrentStore = currentStoreTLC && item.store_tlc === currentStoreTLC;
                 if (isCurrentStore) {
                     resultItem.style.backgroundColor = '#e8f5e8';
                     resultItem.style.borderLeft = '3px solid #28a745';
                 }
-                
+
                 const storeIndicator = isCurrentStore ? '🏪 ' : '';
                 const storeColor = isCurrentStore ? '#28a745' : '#666';
-                
+
                 resultItem.innerHTML = `
                     <div style="font-weight: bold; color: #007bff;">${item.item_name}</div>
                     <div style="color: #666;">ASIN: ${item.asin} | SKU: ${item.sku}</div>
                     <div style="color: ${storeColor};">${storeIndicator}Store: ${item.store_name} (${item.store_tlc})</div>
                 `;
-                
+
                 resultItem.addEventListener('mouseenter', () => {
                     if (!isCurrentStore) {
                         resultItem.style.backgroundColor = '#e9ecef';
                     }
                 });
-                
+
                 resultItem.addEventListener('mouseleave', () => {
                     if (isCurrentStore) {
                         resultItem.style.backgroundColor = '#e8f5e8';
@@ -2027,14 +2058,14 @@
                         resultItem.style.backgroundColor = 'transparent';
                     }
                 });
-                
+
                 resultItem.addEventListener('click', () => {
                     selectItem(item);
                 });
-                
+
                 searchResultsContainer.appendChild(resultItem);
             });
-            
+
             if (results.length > 10) {
                 const moreResults = document.createElement('div');
                 moreResults.textContent = `... and ${results.length - 10} more results`;
@@ -2044,10 +2075,10 @@
                 moreResults.style.fontStyle = 'italic';
                 searchResultsContainer.appendChild(moreResults);
             }
-            
+
             searchResultsContainer.style.display = 'block';
         }
-        
+
         function selectItem(item) {
             // Auto-switch to store if different from current
             const currentStoreTLC = getCurrentStoreTLC();
@@ -2063,11 +2094,11 @@
                     return;
                 }
             }
-            
+
             // Navigate to item directly
             navigateToItemWithContext(item);
         }
-        
+
         function getCurrentStoreTLC() {
             const storeInfo = getCurrentStoreInfo();
             if (storeInfo && storeInfo.storeId) {
@@ -2103,45 +2134,45 @@
                 console.error('❌ Error updating current store display:', error);
             }
         }
-        
+
         function navigateToItemWithContext(item) {
             const itemURL = `https://www.wholefoodsmarket.com/name/dp/${item.asin}`;
             window.open(itemURL, '_blank');
-            
+
             // Clear search
             itemSearchInput.value = '';
             searchResultsContainer.style.display = 'none';
-            
+
             // Show success message with item details
             setTimeout(() => {
                 alert(`✅ Opened ${item.item_name}\nASIN: ${item.asin}\nStore: ${item.store_name} (${item.store_tlc})`);
             }, 500);
         }
-        
+
         // Event listeners for search
         itemSearchInput.addEventListener('input', () => {
             clearTimeout(itemSearchInput.searchTimeout);
             itemSearchInput.searchTimeout = setTimeout(performSearch, 300); // Debounce search
         });
-        
+
         searchTypeSelect.addEventListener('change', performSearch);
-        
+
         // Store filter checkbox event listener
         storeFilterCheckbox.addEventListener('change', performSearch);
-        
+
         itemSearchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 performSearch();
             }
         });
-        
+
         // Click outside to close results
         document.addEventListener('click', (e) => {
             if (!itemSearchContainer.contains(e.target)) {
                 searchResultsContainer.style.display = 'none';
             }
         });
-        
+
         itemSearchContainer.appendChild(itemSearchLabel);
         itemSearchContainer.appendChild(currentStoreDisplayDiv);
         itemSearchContainer.appendChild(storeFilterContainer);
@@ -2149,35 +2180,36 @@
         itemSearchContainer.appendChild(itemSearchInput);
         itemSearchContainer.appendChild(searchResultsContainer);
         contentContainer.appendChild(itemSearchContainer);
-        
+
         contentContainer.appendChild(uploadBtn);
         contentContainer.appendChild(refreshDataBtn);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
         contentContainer.appendChild(debugBtn);
+        contentContainer.appendChild(resetDbBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
-        
+
         // Initialize status after all UI elements are created
-        loadItemDatabase(); // Load stored item database
+        loadItemDatabase(); // Legacy compatibility - no longer loads into memory
         updateStatus();
         updateItemDatabaseStatus();
-        
+
         // Initialize current store display
         updateCurrentStoreDisplay();
-        
+
         console.log('✅ WTS Tools panel created and added to DOM');
-        
+
         // Add panel identification for easier detection
         panel.setAttribute('data-wts-panel', 'true');
         panel.setAttribute('data-wts-version', '1.3.006');
         panel.setAttribute('data-wts-created', Date.now().toString());
-        
+
         // FIXED: Return panel element for reliable detection
         return panel;
-        
+
         } catch (error) {
             console.error('❌ Error creating WTS Tools panel:', error);
             throw error; // Re-throw to be handled by initialization logic
@@ -2192,54 +2224,54 @@
             return false;
         }
         _initializing = true;
-        
+
         try {
             console.log(`🔄 Initializing WTS Tools (attempt ${initializationAttempts + 1}/${maxInitializationAttempts})...`);
             console.log('📍 Current URL:', window.location.href);
             console.log('📍 Document ready state:', document.readyState);
             console.log('📍 Body exists:', !!document.body);
             console.log('📍 Body children count:', document.body ? document.body.children.length : 0);
-            
+
             // Check if already initialized and panel exists
             if (isInitialized && wtsPanel && document.body.contains(wtsPanel)) {
                 console.log('✅ WTS Tools already initialized and panel exists');
                 return true;
             }
-            
+
             // Clean up any existing panel first
             cleanupExistingPanel();
-            
+
             // Create the main panel
             const createdPanel = createExportButton();
-            
+
             // FIXED: Use the returned panel directly instead of searching DOM again
             console.log("🐛 PANEL DETECTION DEBUG - Using returned panel directly");
             wtsPanel = createdPanel;
             console.log("🐛 PANEL DETECTION DEBUG - Panel assigned:", !!wtsPanel);
-            
+
             if (wtsPanel) {
                 console.log('✅ WTS Tools panel created successfully');
                 console.log("🐛 PANEL DETECTION DEBUG - Panel element:", wtsPanel);
-                
+
                 // Add dynamic card count display
                 addCardCounter();
-                
+
                 // Mark as initialized
                 isInitialized = true;
                 initializationAttempts = 0;
-                
+
                 // Start persistence monitoring
                 startPersistenceMonitoring();
-                
+
                 return true;
             } else {
                 throw new Error('Panel creation failed - element not found');
             }
-            
+
         } catch (error) {
             console.error(`❌ Error initializing WTS Tools (attempt ${initializationAttempts + 1}):`, error);
             initializationAttempts++;
-            
+
             if (initializationAttempts < maxInitializationAttempts) {
                 console.log(`🔄 Retrying initialization in 2 seconds...`);
                 initializationRetryTimeout = setTimeout(() => {
@@ -2259,13 +2291,13 @@
     // Clean up any existing panels
     function cleanupExistingPanel() {
         console.log('🧹 Cleaning up existing panels...');
-        
+
         // FIXED: Only remove our own panel, not all fixed elements
         document.querySelectorAll('#wts-panel').forEach(panel => {
             console.log('🗑️ Removing existing WTS panel');
             panel.remove();
         });
-        
+
         // FIXED: Clear all leftover timers created by prior runs
         if (initializationRetryTimeout) {
             clearTimeout(initializationRetryTimeout);
@@ -2283,7 +2315,7 @@
             clearInterval(urlPollingInterval);
             urlPollingInterval = null;
         }
-        
+
         // Reset state
         wtsPanel = null;
         isInitialized = false;
@@ -2293,7 +2325,7 @@
     function addCardCounter() {
         try {
             if (!wtsPanel) return;
-            
+
             const counter = document.createElement('div');
             counter.id = 'asin-card-counter';
             counter.style.fontSize = '13px';
@@ -2302,13 +2334,13 @@
             counter.style.padding = '4px 0';
             counter.style.borderTop = '1px solid #dee2e6';
             counter.style.textAlign = 'center';
-            
+
             // Find the content container and append counter
             const contentContainer = wtsPanel.querySelector('div:last-child');
             if (contentContainer) {
                 contentContainer.appendChild(counter);
                 console.log('✅ Counter added to panel');
-                
+
                 // FIXED: Properly managed interval with cleanup
                 console.log("🐛 INTERVAL DEBUG - Creating card counter interval with proper cleanup");
                 cardCounterInterval = setInterval(() => {
@@ -2344,12 +2376,12 @@
     // Persistence monitoring to detect when UI disappears
     function startPersistenceMonitoring() {
         console.log('👁️ Starting persistence monitoring...');
-        
+
         // Stop any existing monitoring
         if (persistenceCheckInterval) {
             clearInterval(persistenceCheckInterval);
         }
-        
+
         persistenceCheckInterval = setInterval(() => {
             try {
                 // Check if panel still exists in DOM
@@ -2357,12 +2389,12 @@
                     console.warn('⚠️ WTS Tools panel disappeared from DOM, reinitializing...');
                     isInitialized = false;
                     initializationAttempts = 0;
-                    
+
                     // Attempt to reinitialize
                     setTimeout(() => {
                         initializeWTSTools();
                     }, 1000);
-                    
+
                     // Stop current monitoring (will restart after successful init)
                     clearInterval(persistenceCheckInterval);
                     persistenceCheckInterval = null;
@@ -2379,11 +2411,11 @@
         if (currentUrl !== lastUrl) {
             console.log('🔄 URL changed detected:', lastUrl, '->', currentUrl);
             lastUrl = currentUrl;
-            
+
             // Reset initialization state for new page
             isInitialized = false;
             initializationAttempts = 0;
-            
+
             // Delay initialization to allow page to load
             setTimeout(() => {
                 console.log('🔄 Reinitializing WTS Tools for new page...');
@@ -2397,7 +2429,7 @@
         console.log('🎯 Setting up initialization triggers...');
         console.log('📍 Document ready state at setup:', document.readyState);
         console.log('📍 Body exists at setup:', !!document.body);
-        
+
         // Trigger 1: DOM Content Loaded
         if (document.readyState === 'loading') {
             console.log('🎯 Document still loading, setting up DOMContentLoaded listener');
@@ -2406,7 +2438,7 @@
                 setTimeout(initializeWTSTools, 500);
             });
         }
-        
+
         // Trigger 2: Window Load
         if (document.readyState !== 'complete') {
             console.log('🎯 Document not complete, setting up window load listener');
@@ -2415,14 +2447,14 @@
                 setTimeout(initializeWTSTools, 1000);
             });
         }
-        
+
         // Trigger 3: Immediate if document is already ready
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             console.log('🎯 Document already ready, initializing immediately');
             console.log('📍 Body exists for immediate init:', !!document.body);
             setTimeout(initializeWTSTools, 100);
         }
-        
+
         // Trigger 4: Fallback timer with more logging
         setTimeout(() => {
             if (!isInitialized) {
@@ -2434,27 +2466,27 @@
                 console.log('✅ Script already initialized, fallback timer not needed');
             }
         }, 5000);
-        
+
         // SPA Navigation Detection
         // Method 1: History API monitoring
         const originalPushState = history.pushState;
         const originalReplaceState = history.replaceState;
-        
+
         history.pushState = function(...args) {
             originalPushState.apply(this, args);
             setTimeout(handleUrlChange, 100);
         };
-        
+
         history.replaceState = function(...args) {
             originalReplaceState.apply(this, args);
             setTimeout(handleUrlChange, 100);
         };
-        
+
         window.addEventListener('popstate', () => {
             console.log('🎯 Popstate event triggered');
             setTimeout(handleUrlChange, 100);
         });
-        
+
         // Method 2: URL polling as backup with proper cleanup
         console.log("🐛 INTERVAL DEBUG - Creating URL polling interval with cleanup mechanism");
         urlPollingInterval = setInterval(() => {
@@ -2478,11 +2510,11 @@
             }
         }, 2000);
         console.log("🐛 INTERVAL DEBUG - URL polling interval ID:", urlPollingInterval);
-        
+
         // Method 3: DOM mutation observer for major changes
         const observer = new MutationObserver((mutations) => {
             let significantChange = false;
-            
+
             mutations.forEach((mutation) => {
                 // Check for significant DOM changes that might indicate navigation
                 if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
@@ -2496,7 +2528,7 @@
                     }
                 }
             });
-            
+
             if (significantChange) {
                 console.log('🎯 Significant DOM change detected, checking initialization...');
                 setTimeout(() => {
@@ -2507,12 +2539,12 @@
                 }, 1000);
             }
         });
-        
+
         observer.observe(document.body, {
             childList: true,
             subtree: true
         });
-        
+
         console.log('✅ All initialization triggers set up');
     }
 
