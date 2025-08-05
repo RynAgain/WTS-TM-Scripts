@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.007
+// @version      1.3.008
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -2126,10 +2126,10 @@
             // Create the main panel
             const createdPanel = createExportButton();
             
-            // FIXED: Use reliable ID-based detection instead of fragile CSS selector
-            console.log("🐛 PANEL DETECTION DEBUG - Looking for panel with ID 'wts-panel'");
-            wtsPanel = document.getElementById('wts-panel');
-            console.log("🐛 PANEL DETECTION DEBUG - Found panel by ID:", !!wtsPanel);
+            // FIXED: Use the returned panel directly instead of searching DOM again
+            console.log("🐛 PANEL DETECTION DEBUG - Using returned panel directly");
+            wtsPanel = createdPanel;
+            console.log("🐛 PANEL DETECTION DEBUG - Panel assigned:", !!wtsPanel);
             
             if (wtsPanel) {
                 console.log('✅ WTS Tools panel created successfully');
