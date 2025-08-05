@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.005
+// @version      1.3.006
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -21,8 +21,11 @@
 (function () {
     'use strict';
     
-    // Debug logging for troubleshooting
+    // Enhanced debug logging for troubleshooting
     console.log('🚀 WTS Tools script starting...');
+    console.log('📍 Current URL:', window.location.href);
+    console.log('📍 Document ready state:', document.readyState);
+    console.log('📍 Timestamp:', new Date().toISOString());
     
     // Check if XLSX library is loaded
     if (typeof XLSX === 'undefined') {
@@ -32,15 +35,28 @@
         console.log('✅ XLSX library loaded successfully');
     }
 
+    // Global variables for persistence management
+    let wtsPanel = null;
+    let initializationAttempts = 0;
+    let maxInitializationAttempts = 10;
+    let persistenceCheckInterval = null;
+    let lastUrl = window.location.href;
+    let isInitialized = false;
+    let initializationRetryTimeout = null;
+
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
     let currentStoreInfo = null;
     let networkInterceptionActive = false;
 
     function startNetworkInterception() {
-        if (networkInterceptionActive) return;
+        if (networkInterceptionActive) {
+            console.log("🌐 Network interception already active");
+            return;
+        }
         
         console.log("🌐 Starting network request interception for CSRF token capture...");
+        console.log("📍 Timestamp:", new Date().toISOString());
         networkInterceptionActive = true;
 
         // Intercept XMLHttpRequest
@@ -100,7 +116,11 @@
                                 GM_setValue('storeInfoTimestamp', Date.now());
                                 
                                 // Update UI if it exists
-                                updateCurrentStoreDisplay();
+                                try {
+                                    updateCurrentStoreDisplay();
+                                } catch (error) {
+                                    console.error('❌ Error updating store display from network interception:', error);
+                                }
                             }
                         }).catch(err => {
                             console.log("Error parsing summary response:", err);
@@ -157,6 +177,49 @@
         return currentStoreInfo; // Return current session info if available
     }
 
+    // Enhanced error handling and recovery
+    function handleScriptError(error, context) {
+        console.error(`❌ WTS Tools Error in ${context}:`, error);
+        console.error('Stack trace:', error.stack);
+        
+        // Log additional context
+        console.log('📍 Current URL:', window.location.href);
+        console.log('📍 Document ready state:', document.readyState);
+        console.log('📍 Panel exists:', !!wtsPanel);
+        console.log('📍 Panel in DOM:', wtsPanel ? document.body.contains(wtsPanel) : false);
+        console.log('📍 Initialization state:', isInitialized);
+        
+        // Attempt recovery for certain errors
+        if (context === 'initialization' && initializationAttempts < maxInitializationAttempts) {
+            console.log('🔄 Attempting error recovery...');
+            setTimeout(() => {
+                initializeWTSTools();
+            }, 3000);
+        }
+    }
+
+    // Graceful cleanup on page unload
+    function cleanup() {
+        console.log('🧹 Cleaning up WTS Tools...');
+        
+        if (persistenceCheckInterval) {
+            clearInterval(persistenceCheckInterval);
+            persistenceCheckInterval = null;
+        }
+        
+        if (initializationRetryTimeout) {
+            clearTimeout(initializationRetryTimeout);
+            initializationRetryTimeout = null;
+        }
+        
+        isInitialized = false;
+        wtsPanel = null;
+    }
+
+    // Setup cleanup handlers
+    window.addEventListener('beforeunload', cleanup);
+    window.addEventListener('unload', cleanup);
+
     function getStoreTLCFromStoreId(storeId, storeMappingData) {
         // Find the store_tlc that matches this storeId
         for (const [tlc, id] of storeMappingData.entries()) {
@@ -204,7 +267,14 @@
 
     function createExportButton() {
         try {
-            console.log('🔧 Initializing WTS Tools...');
+            console.log('🔧 Creating WTS Tools panel...');
+            console.log('📍 Document ready state:', document.readyState);
+            console.log('📍 Body element exists:', !!document.body);
+            
+            // Ensure document body exists
+            if (!document.body) {
+                throw new Error('Document body not available yet');
+            }
             
             let lastExtractedData = [];
             let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
@@ -1461,6 +1531,43 @@
 
         csrfSettingsBtn.addEventListener('click', showCSRFSettings);
 
+        // Debug info button for troubleshooting
+        const debugBtn = document.createElement('button');
+        debugBtn.textContent = '🐛 Debug Info';
+        debugBtn.style.padding = '8px';
+        debugBtn.style.backgroundColor = '#e83e8c';
+        debugBtn.style.color = '#fff';
+        debugBtn.style.border = 'none';
+        debugBtn.style.borderRadius = '4px';
+        debugBtn.style.cursor = 'pointer';
+        debugBtn.style.fontSize = '12px';
+        debugBtn.style.marginTop = '4px';
+
+        debugBtn.addEventListener('click', () => {
+            const debugInfo = {
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                documentState: document.readyState,
+                panelExists: !!wtsPanel,
+                panelInDOM: wtsPanel ? document.body.contains(wtsPanel) : false,
+                isInitialized: isInitialized,
+                initAttempts: initializationAttempts,
+                networkInterceptionActive: networkInterceptionActive,
+                storeMappings: storeMappingData.size,
+                itemDatabase: itemDatabase.length,
+                capturedToken: !!getCapturedToken(),
+                storeInfo: getCurrentStoreInfo()
+            };
+            
+            console.log('🐛 WTS Tools Debug Info:', debugInfo);
+            
+            const debugText = Object.entries(debugInfo)
+                .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+                .join('\n');
+                
+            alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
+        });
+
         // Function to update store dropdown options
         const updateStoreDropdown = () => {
             storeSelect.innerHTML = '<option value="">Select a store...</option>';
@@ -1844,22 +1951,26 @@
         }
 
         function updateCurrentStoreDisplay() {
-            // Update store display if UI elements exist
-            if (typeof currentStoreDisplayDiv !== 'undefined') {
-                const storeInfo = getCurrentStoreInfo();
-                if (storeInfo) {
-                    const tlc = getStoreTLCFromStoreId(storeInfo.storeId, storeMappingData);
-                    if (tlc) {
-                        currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (${tlc})`;
-                        currentStoreDisplayDiv.style.color = '#28a745';
+            try {
+                // Update store display if UI elements exist
+                if (typeof currentStoreDisplayDiv !== 'undefined' && currentStoreDisplayDiv && document.body.contains(currentStoreDisplayDiv)) {
+                    const storeInfo = getCurrentStoreInfo();
+                    if (storeInfo) {
+                        const tlc = getStoreTLCFromStoreId(storeInfo.storeId, storeMappingData);
+                        if (tlc) {
+                            currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (${tlc})`;
+                            currentStoreDisplayDiv.style.color = '#28a745';
+                        } else {
+                            currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (ID: ${storeInfo.storeId})`;
+                            currentStoreDisplayDiv.style.color = '#ffc107';
+                        }
                     } else {
-                        currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (ID: ${storeInfo.storeId})`;
-                        currentStoreDisplayDiv.style.color = '#ffc107';
+                        currentStoreDisplayDiv.textContent = 'Store info not available';
+                        currentStoreDisplayDiv.style.color = '#666';
                     }
-                } else {
-                    currentStoreDisplayDiv.textContent = 'Store info not available';
-                    currentStoreDisplayDiv.style.color = '#666';
                 }
+            } catch (error) {
+                console.error('❌ Error updating current store display:', error);
             }
         }
         
@@ -1914,6 +2025,7 @@
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
+        contentContainer.appendChild(debugBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
@@ -1926,21 +2038,109 @@
         // Initialize current store display
         updateCurrentStoreDisplay();
         
-        console.log('✅ WTS Tools panel created successfully');
+        console.log('✅ WTS Tools panel created and added to DOM');
+        
+        // Add panel identification for easier detection
+        panel.setAttribute('data-wts-panel', 'true');
+        panel.setAttribute('data-wts-version', '1.3.006');
+        panel.setAttribute('data-wts-created', Date.now().toString());
         
         } catch (error) {
-            console.error('❌ Error creating WTS Tools:', error);
-            alert(`❌ Failed to create WTS Tools: ${error.message}\n\nCheck the browser console for more details.`);
+            console.error('❌ Error creating WTS Tools panel:', error);
+            throw error; // Re-throw to be handled by initialization logic
         }
     }
 
-    window.addEventListener('load', () => {
+    // Enhanced initialization function with retry logic
+    function initializeWTSTools() {
         try {
-            console.log('🎯 Page loaded, creating export button...');
+            console.log(`🔄 Initializing WTS Tools (attempt ${initializationAttempts + 1}/${maxInitializationAttempts})...`);
+            console.log('📍 Current URL:', window.location.href);
+            console.log('📍 Document ready state:', document.readyState);
+            
+            // Check if already initialized and panel exists
+            if (isInitialized && wtsPanel && document.body.contains(wtsPanel)) {
+                console.log('✅ WTS Tools already initialized and panel exists');
+                return true;
+            }
+            
+            // Clean up any existing panel first
+            cleanupExistingPanel();
+            
+            // Create the main panel
             createExportButton();
-            console.log('✅ Export button created successfully');
+            
+            // Find and store reference to the created panel
+            wtsPanel = document.querySelector('body > div[style*="position: fixed"][style*="z-index: 9999"]');
+            
+            if (wtsPanel) {
+                console.log('✅ WTS Tools panel created successfully');
+                
+                // Add dynamic card count display
+                addCardCounter();
+                
+                // Mark as initialized
+                isInitialized = true;
+                initializationAttempts = 0;
+                
+                // Start persistence monitoring
+                startPersistenceMonitoring();
+                
+                return true;
+            } else {
+                throw new Error('Panel creation failed - element not found');
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error initializing WTS Tools (attempt ${initializationAttempts + 1}):`, error);
+            initializationAttempts++;
+            
+            if (initializationAttempts < maxInitializationAttempts) {
+                console.log(`🔄 Retrying initialization in 2 seconds...`);
+                initializationRetryTimeout = setTimeout(() => {
+                    initializeWTSTools();
+                }, 2000);
+            } else {
+                console.error('❌ Max initialization attempts reached. WTS Tools failed to initialize.');
+                alert(`❌ WTS Tools failed to initialize after ${maxInitializationAttempts} attempts.\n\nError: ${error.message}\n\nPlease refresh the page or check the console for details.`);
+            }
+            return false;
+        }
+    }
 
-            // Dynamic card count display
+    // Clean up any existing panels
+    function cleanupExistingPanel() {
+        console.log('🧹 Cleaning up existing panels...');
+        
+        // Clear any existing retry timeout
+        if (initializationRetryTimeout) {
+            clearTimeout(initializationRetryTimeout);
+            initializationRetryTimeout = null;
+        }
+        
+        // Remove existing panels
+        const existingPanels = document.querySelectorAll('body > div[style*="position: fixed"][style*="z-index: 9999"]');
+        existingPanels.forEach((panel, index) => {
+            console.log(`🗑️ Removing existing panel ${index + 1}`);
+            panel.remove();
+        });
+        
+        // Reset state
+        wtsPanel = null;
+        isInitialized = false;
+        
+        // Stop existing persistence monitoring
+        if (persistenceCheckInterval) {
+            clearInterval(persistenceCheckInterval);
+            persistenceCheckInterval = null;
+        }
+    }
+
+    // Add dynamic card counter to the panel
+    function addCardCounter() {
+        try {
+            if (!wtsPanel) return;
+            
             const counter = document.createElement('div');
             counter.id = 'asin-card-counter';
             counter.style.fontSize = '13px';
@@ -1950,28 +2150,178 @@
             counter.style.borderTop = '1px solid #dee2e6';
             counter.style.textAlign = 'center';
             
-            // Find the panel and append to its content container
-            const panel = document.querySelector('body > div[style*="position: fixed"]');
-            const contentContainer = panel?.querySelector('div:last-child');
+            // Find the content container and append counter
+            const contentContainer = wtsPanel.querySelector('div:last-child');
             if (contentContainer) {
                 contentContainer.appendChild(counter);
                 console.log('✅ Counter added to panel');
+                
+                // Start counter updates
+                setInterval(() => {
+                    try {
+                        if (document.body.contains(counter)) {
+                            const { data, emptyCount } = extractDataFromCards();
+                            counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
+                        }
+                    } catch (error) {
+                        console.error('Error updating counter:', error);
+                    }
+                }, 1000);
             } else {
                 console.warn('⚠️ Could not find content container for counter');
             }
-
-            setInterval(() => {
-                try {
-                    const { data, emptyCount } = extractDataFromCards();
-                    counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
-                } catch (error) {
-                    console.error('Error updating counter:', error);
-                }
-            }, 1000);
-            
         } catch (error) {
-            console.error('❌ Error in window load handler:', error);
-            alert(`❌ WTS Tools failed to initialize: ${error.message}\n\nCheck the browser console for more details.`);
+            console.error('❌ Error adding card counter:', error);
         }
-    });
+    }
+
+    // Persistence monitoring to detect when UI disappears
+    function startPersistenceMonitoring() {
+        console.log('👁️ Starting persistence monitoring...');
+        
+        // Stop any existing monitoring
+        if (persistenceCheckInterval) {
+            clearInterval(persistenceCheckInterval);
+        }
+        
+        persistenceCheckInterval = setInterval(() => {
+            try {
+                // Check if panel still exists in DOM
+                if (!wtsPanel || !document.body.contains(wtsPanel)) {
+                    console.warn('⚠️ WTS Tools panel disappeared from DOM, reinitializing...');
+                    isInitialized = false;
+                    initializationAttempts = 0;
+                    
+                    // Attempt to reinitialize
+                    setTimeout(() => {
+                        initializeWTSTools();
+                    }, 1000);
+                    
+                    // Stop current monitoring (will restart after successful init)
+                    clearInterval(persistenceCheckInterval);
+                    persistenceCheckInterval = null;
+                }
+            } catch (error) {
+                console.error('❌ Error in persistence monitoring:', error);
+            }
+        }, 3000); // Check every 3 seconds
+    }
+
+    // Handle URL changes for SPA navigation
+    function handleUrlChange() {
+        const currentUrl = window.location.href;
+        if (currentUrl !== lastUrl) {
+            console.log('🔄 URL changed detected:', lastUrl, '->', currentUrl);
+            lastUrl = currentUrl;
+            
+            // Reset initialization state for new page
+            isInitialized = false;
+            initializationAttempts = 0;
+            
+            // Delay initialization to allow page to load
+            setTimeout(() => {
+                console.log('🔄 Reinitializing WTS Tools for new page...');
+                initializeWTSTools();
+            }, 2000);
+        }
+    }
+
+    // Multiple initialization triggers for better reliability
+    function setupInitializationTriggers() {
+        console.log('🎯 Setting up initialization triggers...');
+        
+        // Trigger 1: DOM Content Loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                console.log('🎯 DOMContentLoaded triggered');
+                setTimeout(initializeWTSTools, 500);
+            });
+        }
+        
+        // Trigger 2: Window Load
+        if (document.readyState !== 'complete') {
+            window.addEventListener('load', () => {
+                console.log('🎯 Window load triggered');
+                setTimeout(initializeWTSTools, 1000);
+            });
+        }
+        
+        // Trigger 3: Immediate if document is already ready
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            console.log('🎯 Document already ready, initializing immediately');
+            setTimeout(initializeWTSTools, 100);
+        }
+        
+        // Trigger 4: Fallback timer
+        setTimeout(() => {
+            if (!isInitialized) {
+                console.log('🎯 Fallback timer triggered');
+                initializeWTSTools();
+            }
+        }, 5000);
+        
+        // SPA Navigation Detection
+        // Method 1: History API monitoring
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        
+        history.pushState = function(...args) {
+            originalPushState.apply(this, args);
+            setTimeout(handleUrlChange, 100);
+        };
+        
+        history.replaceState = function(...args) {
+            originalReplaceState.apply(this, args);
+            setTimeout(handleUrlChange, 100);
+        };
+        
+        window.addEventListener('popstate', () => {
+            console.log('🎯 Popstate event triggered');
+            setTimeout(handleUrlChange, 100);
+        });
+        
+        // Method 2: URL polling as backup
+        setInterval(() => {
+            handleUrlChange();
+        }, 2000);
+        
+        // Method 3: DOM mutation observer for major changes
+        const observer = new MutationObserver((mutations) => {
+            let significantChange = false;
+            
+            mutations.forEach((mutation) => {
+                // Check for significant DOM changes that might indicate navigation
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    for (let node of mutation.addedNodes) {
+                        if (node.nodeType === Node.ELEMENT_NODE &&
+                            (node.tagName === 'MAIN' || node.tagName === 'SECTION' ||
+                             node.classList?.contains('page') || node.classList?.contains('content'))) {
+                            significantChange = true;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            if (significantChange) {
+                console.log('🎯 Significant DOM change detected, checking initialization...');
+                setTimeout(() => {
+                    if (!isInitialized || !wtsPanel || !document.body.contains(wtsPanel)) {
+                        console.log('🔄 Reinitializing due to DOM changes...');
+                        initializeWTSTools();
+                    }
+                }, 1000);
+            }
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        console.log('✅ All initialization triggers set up');
+    }
+
+    // Initialize the setup
+    setupInitializationTriggers();
 })();
