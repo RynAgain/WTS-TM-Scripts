@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.006
+// @version      1.3.007
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -43,6 +43,10 @@
     let lastUrl = window.location.href;
     let isInitialized = false;
     let initializationRetryTimeout = null;
+    
+    // FIXED: Add interval tracking for proper cleanup
+    let cardCounterInterval = null;
+    let urlPollingInterval = null;
 
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
@@ -74,6 +78,8 @@
         // Intercept fetch requests
         const originalFetch = window.fetch;
         window.fetch = function(url, options) {
+            console.log("🌐 FETCH INTERCEPTOR DEBUG - Input type:", typeof url, url instanceof Request ? "Request object" : "String/other");
+            
             // Capture CSRF tokens
             if (options && options.headers) {
                 const headers = options.headers;
@@ -97,8 +103,24 @@
             // Intercept summary requests to capture store info
             const fetchPromise = originalFetch.apply(this, arguments);
             
-            if (url && url.includes('summary')) {
-                console.log("🏪 Intercepting summary request:", url);
+            // FIXED: Robust URL extraction that safely handles Request objects
+            let urlString = '';
+            try {
+                if (typeof url === 'string') {
+                    urlString = url;
+                } else if (url instanceof Request) {
+                    urlString = url.url;
+                } else {
+                    urlString = String(url);
+                }
+                console.log("🌐 FETCH INTERCEPTOR DEBUG - Extracted URL:", urlString);
+            } catch (error) {
+                console.error("❌ FETCH INTERCEPTOR ERROR - Failed to extract URL:", error);
+                return fetchPromise; // Return early to prevent crash
+            }
+            
+            if (urlString && urlString.includes('summary')) {
+                console.log("🏪 Intercepting summary request:", urlString);
                 fetchPromise.then(response => {
                     if (response.ok) {
                         response.clone().json().then(data => {
@@ -210,6 +232,19 @@
         if (initializationRetryTimeout) {
             clearTimeout(initializationRetryTimeout);
             initializationRetryTimeout = null;
+        }
+        
+        // FIXED: Clear tracked intervals to prevent memory leaks
+        if (cardCounterInterval) {
+            console.log('🧹 Clearing card counter interval:', cardCounterInterval);
+            clearInterval(cardCounterInterval);
+            cardCounterInterval = null;
+        }
+        
+        if (urlPollingInterval) {
+            console.log('🧹 Clearing URL polling interval:', urlPollingInterval);
+            clearInterval(urlPollingInterval);
+            urlPollingInterval = null;
         }
         
         isInitialized = false;
@@ -1001,6 +1036,7 @@
         const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
         
         const panel = document.createElement('div');
+        panel.id = 'wts-panel'; // FIXED: Add unique ID for reliable detection
         panel.style.position = 'fixed';
         panel.style.top = savedPosition.y + 'px';
         panel.style.left = savedPosition.x + 'px';
@@ -1290,7 +1326,15 @@
                 const newItems = await parseXLSX(arrayBuffer);
                 
                 // Remove processing message
-                document.body.removeChild(processingAlert);
+                // FIXED: Safe processing message removal
+                try {
+                    if (processingAlert && document.body.contains(processingAlert)) {
+                        document.body.removeChild(processingAlert);
+                        console.log("🐛 OVERLAY REMOVAL DEBUG - Successfully removed processing overlay");
+                    }
+                } catch (removeError) {
+                    console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
+                }
                 
                 // Update the item database
                 itemDatabase = newItems;
@@ -1305,9 +1349,18 @@
                 
             } catch (error) {
                 // Remove processing message if it exists
+                console.log("🐛 OVERLAY REMOVAL DEBUG - Error handler attempting to remove processing overlay");
                 const processingAlert = document.querySelector('div[style*="Processing SharePoint data"]');
+                console.log("🐛 OVERLAY REMOVAL DEBUG - Found processing alert element:", !!processingAlert);
                 if (processingAlert) {
-                    document.body.removeChild(processingAlert.parentElement);
+                    console.log("🐛 OVERLAY REMOVAL DEBUG - Parent element:", processingAlert.parentElement);
+                    console.log("🐛 OVERLAY REMOVAL DEBUG - Parent in DOM:", processingAlert.parentElement ? document.body.contains(processingAlert.parentElement) : false);
+                    try {
+                        document.body.removeChild(processingAlert.parentElement);
+                        console.log("🐛 OVERLAY REMOVAL DEBUG - Successfully removed processing overlay");
+                    } catch (removeError) {
+                        console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
+                    }
                 }
                 console.error('❌ Error processing SharePoint data:', error);
                 alert(`❌ Error processing SharePoint data: ${error.message}\n\nCheck console for details.`);
@@ -2045,6 +2098,9 @@
         panel.setAttribute('data-wts-version', '1.3.006');
         panel.setAttribute('data-wts-created', Date.now().toString());
         
+        // FIXED: Return panel element for reliable detection
+        return panel;
+        
         } catch (error) {
             console.error('❌ Error creating WTS Tools panel:', error);
             throw error; // Re-throw to be handled by initialization logic
@@ -2068,13 +2124,16 @@
             cleanupExistingPanel();
             
             // Create the main panel
-            createExportButton();
+            const createdPanel = createExportButton();
             
-            // Find and store reference to the created panel
-            wtsPanel = document.querySelector('body > div[style*="position: fixed"][style*="z-index: 9999"]');
+            // FIXED: Use reliable ID-based detection instead of fragile CSS selector
+            console.log("🐛 PANEL DETECTION DEBUG - Looking for panel with ID 'wts-panel'");
+            wtsPanel = document.getElementById('wts-panel');
+            console.log("🐛 PANEL DETECTION DEBUG - Found panel by ID:", !!wtsPanel);
             
             if (wtsPanel) {
                 console.log('✅ WTS Tools panel created successfully');
+                console.log("🐛 PANEL DETECTION DEBUG - Panel element:", wtsPanel);
                 
                 // Add dynamic card count display
                 addCardCounter();
@@ -2156,17 +2215,25 @@
                 contentContainer.appendChild(counter);
                 console.log('✅ Counter added to panel');
                 
-                // Start counter updates
-                setInterval(() => {
+                // CRITICAL BUG: Unbounded interval - never cleared!
+                console.log("🐛 INTERVAL DEBUG - Creating card counter interval (potential memory leak)");
+                cardCounterInterval = setInterval(() => {
                     try {
                         if (document.body.contains(counter)) {
                             const { data, emptyCount } = extractDataFromCards();
                             counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
+                        } else {
+                            console.log("🐛 INTERVAL DEBUG - Counter element removed, clearing interval");
+                            if (cardCounterInterval) {
+                                clearInterval(cardCounterInterval);
+                                cardCounterInterval = null;
+                            }
                         }
                     } catch (error) {
                         console.error('Error updating counter:', error);
                     }
                 }, 1000);
+                console.log("🐛 INTERVAL DEBUG - Card counter interval ID:", cardCounterInterval);
             } else {
                 console.warn('⚠️ Could not find content container for counter');
             }
@@ -2281,9 +2348,12 @@
         });
         
         // Method 2: URL polling as backup
-        setInterval(() => {
+        // CRITICAL BUG: Unbounded interval - never cleared!
+        console.log("🐛 INTERVAL DEBUG - Creating URL polling interval (potential memory leak)");
+        urlPollingInterval = setInterval(() => {
             handleUrlChange();
         }, 2000);
+        console.log("🐛 INTERVAL DEBUG - URL polling interval ID:", urlPollingInterval);
         
         // Method 3: DOM mutation observer for major changes
         const observer = new MutationObserver((mutations) => {
