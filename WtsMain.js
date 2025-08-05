@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.010
+// @version      1.3.011
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -22,9 +22,43 @@
 (function () {
     'use strict';
     
-    // IMMEDIATE VISIBILITY TEST - This should always show in console
-    console.log('🚨 WTS TOOLS SCRIPT LOADED - If you see this, the script is running!');
+    // ULTRA-AGGRESSIVE VISIBILITY TEST - Multiple methods to ensure we see this
+    console.log('🚨🚨🚨 WTS TOOLS SCRIPT LOADED - If you see this, the script is running! 🚨🚨🚨');
+    console.error('🚨 WTS TOOLS ERROR LOG TEST - This should be RED and visible!');
+    console.warn('🚨 WTS TOOLS WARN LOG TEST - This should be YELLOW and visible!');
+    console.info('🚨 WTS TOOLS INFO LOG TEST - This should be BLUE and visible!');
+    
+    // Try to create a visible alert as well
+    try {
+        // Create a temporary visual indicator
+        const indicator = document.createElement('div');
+        indicator.style.position = 'fixed';
+        indicator.style.top = '0';
+        indicator.style.left = '0';
+        indicator.style.zIndex = '999999';
+        indicator.style.background = 'red';
+        indicator.style.color = 'white';
+        indicator.style.padding = '10px';
+        indicator.style.fontSize = '16px';
+        indicator.style.fontWeight = 'bold';
+        indicator.textContent = '🚨 WTS TOOLS SCRIPT IS RUNNING! 🚨';
+        
+        // Add to page immediately if body exists
+        if (document.body) {
+            document.body.appendChild(indicator);
+            setTimeout(() => {
+                if (indicator.parentNode) {
+                    indicator.parentNode.removeChild(indicator);
+                }
+            }, 3000);
+        }
+    } catch (e) {
+        console.error('Failed to create visual indicator:', e);
+    }
+    
     console.log('🚨 Timestamp:', new Date().toISOString());
+    console.log('🚨 User Agent:', navigator.userAgent);
+    console.log('🚨 Tampermonkey Version Check:', typeof GM_info !== 'undefined' ? GM_info.version : 'GM_info not available');
     
     // Enhanced debug logging for troubleshooting
     console.log('🚀 WTS Tools script starting...');
