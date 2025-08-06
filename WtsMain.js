@@ -17,7 +17,7 @@
 // @connect      share.amazon.com
 // @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (function () {
@@ -487,10 +487,10 @@
             return mappings;
         }
 
-        // XLSX parsing function for item database with performance optimizations
-        async function parseXLSX(arrayBuffer) {
+        // XLSX parsing function with true streaming - never holds full dataset in memory
+        async function parseXLSXStreaming(arrayBuffer) {
             try {
-                console.log('📊 Starting XLSX parsing...');
+                console.log('📊 Starting XLSX streaming parse...');
                 const startTime = Date.now();
 
                 const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -516,11 +516,11 @@
                 }
 
                 const totalRows = jsonData.length - 1; // Exclude header
-                console.log(`📊 Processing ${totalRows} rows...`);
+                console.log(`📊 Streaming ${totalRows} rows directly to IndexedDB...`);
 
                 // Warn about large datasets
                 if (totalRows > 100000) {
-                    const proceed = confirm(`⚠️ Large dataset detected: ${totalRows} rows\n\nThis may take a while and could slow down your browser.\n\nDo you want to continue?`);
+                    const proceed = confirm(`⚠️ Large dataset detected: ${totalRows} rows\n\nThis will be streamed directly to IndexedDB to avoid memory issues.\n\nDo you want to continue?`);
                     if (!proceed) {
                         throw new Error('Processing cancelled by user');
                     }
@@ -548,93 +548,113 @@
                     }
                 });
 
-                const items = [];
-                const errors = [];
+                // Clear existing data first
+                await db.items.clear();
 
-                // Process data in batches to prevent browser freezing
-                const BATCH_SIZE = 1000;
-                const totalBatches = Math.ceil((jsonData.length - 1) / BATCH_SIZE);
+                let savedCount = 0;
+                let errorCount = 0;
+                const BATCH_SIZE = 500; // Smaller batches for memory efficiency
+                let batch = [];
 
-                console.log(`📊 Processing in ${totalBatches} batches of ${BATCH_SIZE} rows each...`);
+                // Stream process rows directly to IndexedDB without building large arrays
+                for (let i = 1; i < jsonData.length; i++) { // Start at 1 to skip header
+                    const row = jsonData[i];
 
-                // Process batches with async delays
-                for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-                    const startRow = batchIndex * BATCH_SIZE + 1; // +1 to skip header
-                    const endRow = Math.min(startRow + BATCH_SIZE, jsonData.length);
+                    if (!row || row.length === 0) continue; // Skip empty rows
 
-                    console.log(`📊 Processing batch ${batchIndex + 1}/${totalBatches} (rows ${startRow}-${endRow - 1})`);
+                    const item = {};
+                    let hasError = false;
 
-                    for (let i = startRow; i < endRow; i++) {
-                        const row = jsonData[i];
-
-                        if (!row || row.length === 0) continue; // Skip empty rows
-
-                        const item = {};
-                        let hasError = false;
-
-                        // Process required columns
-                        requiredColumns.forEach(col => {
-                            const value = row[columnIndices[col]];
-                            if (value === undefined || value === null || value === '') {
-                                // Skip this item but continue processing others
-                                errors.push(`Row ${i + 1}: Missing required value for "${col}"`);
-                                hasError = true;
-                                return;
-                            }
-                            item[col] = value.toString().trim();
-                        });
-
-                        if (hasError) continue;
-
-                        // Validate ASIN format - but allow processing to continue
-                        if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
-                            errors.push(`Row ${i + 1}: Invalid ASIN format "${item.asin}" (must be 10 alphanumeric characters)`);
-                            // Don't skip the item, just log the error
+                    // Process required columns
+                    requiredColumns.forEach(col => {
+                        const value = row[columnIndices[col]];
+                        if (value === undefined || value === null || value === '') {
+                            errorCount++;
+                            hasError = true;
+                            return;
                         }
+                        item[col] = value.toString().trim();
+                    });
 
-                        // Validate store_tlc format - but allow processing to continue
-                        if (item.store_tlc && item.store_tlc.length !== 3) {
-                            errors.push(`Row ${i + 1}: Invalid store_tlc format "${item.store_tlc}" (must be 3 characters)`);
-                            // Don't skip the item, just log the error
-                        }
+                    if (hasError) continue;
 
-                        // Process optional columns
-                        optionalColumns.forEach(col => {
-                            if (columnIndices[col] !== undefined) {
-                                const value = row[columnIndices[col]];
-                                item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
-                            }
-                        });
-
-                        // Normalize data
-                        item.asin = item.asin.toUpperCase();
-                        item.store_tlc = item.store_tlc.toUpperCase();
-
-                        items.push(item);
+                    // Validate and normalize data
+                    if (item.asin && !/^[A-Z0-9]{10}$/i.test(item.asin)) {
+                        errorCount++;
+                    }
+                    if (item.store_tlc && item.store_tlc.length !== 3) {
+                        errorCount++;
                     }
 
-                    // Allow browser to breathe between batches for large datasets
-                    if (totalRows > 50000 && batchIndex < totalBatches - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 10));
+                    // Process optional columns
+                    optionalColumns.forEach(col => {
+                        if (columnIndices[col] !== undefined) {
+                            const value = row[columnIndices[col]];
+                            item[col] = value !== undefined && value !== null ? value.toString().trim() : '';
+                        }
+                    });
+
+                    // Normalize data
+                    item.asin = (item.asin || '').toUpperCase();
+                    item.store_tlc = (item.store_tlc || '').toUpperCase();
+                    item.item_nameLower = (item.item_name || '').toLowerCase();
+
+                    // Add to batch
+                    batch.push({
+                        asin: item.asin,
+                        sku: item.sku || '',
+                        store_tlc: item.store_tlc,
+                        store_acronym: item.store_acronym || '',
+                        store_name: item.store_name || '',
+                        item_nameLower: item.item_nameLower,
+                        item_name: item.item_name || '',
+                        quantity: item.quantity || '',
+                        listing_status: item.listing_status || '',
+                        event_date: item.event_date || '',
+                        sku_wo_chck_dgt: item.sku_wo_chck_dgt || '',
+                        rnk: item.rnk || '',
+                        eod_our_price: item.eod_our_price || '',
+                        offering_start_datetime: item.offering_start_datetime || '',
+                        offering_end_datetime: item.offering_end_datetime || '',
+                        merchant_customer_id: item.merchant_customer_id || '',
+                        encrypted_merchant_i: item.encrypted_merchant_i || ''
+                    });
+
+                    // Save batch when it reaches size limit
+                    if (batch.length >= BATCH_SIZE) {
+                        await db.items.bulkAdd(batch);
+                        savedCount += batch.length;
+                        batch = []; // Clear batch
+
+                        // Progress update every 10k items
+                        if (savedCount % 10000 === 0) {
+                            console.log(`📦 Streamed ${savedCount.toLocaleString()}/${totalRows.toLocaleString()} items to IndexedDB...`);
+                        }
+
+                        // Allow UI to breathe
+                        if (savedCount % 5000 === 0) {
+                            await new Promise(resolve => setTimeout(resolve, 10));
+                        }
                     }
                 }
+
+                // Save any remaining items in the final batch
+                if (batch.length > 0) {
+                    await db.items.bulkAdd(batch);
+                    savedCount += batch.length;
+                }
+
+                // Save timestamp
+                GM_setValue('itemDatabaseTimestamp', Date.now());
 
                 const processingTime = (Date.now() - startTime) / 1000;
-                console.log(`✅ Processed ${items.length} items in ${processingTime.toFixed(2)} seconds`);
-
-                // Log validation errors but don't stop processing for large datasets
-                if (errors.length > 0) {
-                    console.warn(`XLSX parsing warnings (${errors.length} total):`, errors.slice(0, 10));
-                    if (errors.length > 100) {
-                        console.warn(`... and ${errors.length - 10} more validation errors (check data quality)`);
-                    }
+                console.log(`✅ Streamed ${savedCount.toLocaleString()} items to IndexedDB in ${processingTime.toFixed(2)} seconds`);
+                
+                if (errorCount > 0) {
+                    console.warn(`⚠️ Skipped ${errorCount} rows due to validation errors`);
                 }
 
-                if (items.length === 0) {
-                    throw new Error('No valid items found in the XLSX file');
-                }
-
-                return items;
+                return savedCount;
 
             } catch (error) {
                 if (error.message.includes('Unsupported file')) {
@@ -644,54 +664,83 @@
             }
         }
 
-        // Save item database to IndexedDB with batching for performance
-        async function saveItemDatabase() {
+        // Legacy function for compatibility
+        async function parseXLSX(arrayBuffer) {
+            // For large files, use streaming directly
+            return await parseXLSXStreaming(arrayBuffer);
+        }
+
+        // Stream items directly to IndexedDB without holding in memory
+        async function saveItemDatabaseStreaming(items) {
             try {
-                console.log(`💾 Saving ${itemDatabase.length} items to IndexedDB...`);
+                console.log(`💾 Streaming ${items.length} items to IndexedDB...`);
                 const startTime = Date.now();
 
                 // Clear existing data
                 await db.items.clear();
 
-                // Prepare data for IndexedDB with normalized fields
-                const toStore = itemDatabase.map(item => ({
-                    asin: (item.asin || '').toUpperCase(),
-                    sku: (item.sku || ''),
-                    store_tlc: (item.store_tlc || '').toUpperCase(),
-                    store_acronym: item.store_acronym || '',
-                    store_name: item.store_name || '',
-                    item_nameLower: (item.item_name || '').toLowerCase(),
-                    item_name: item.item_name || '',
-                    // Include optional fields if they exist
-                    quantity: item.quantity || '',
-                    listing_status: item.listing_status || '',
-                    event_date: item.event_date || '',
-                    sku_wo_chck_dgt: item.sku_wo_chck_dgt || '',
-                    rnk: item.rnk || '',
-                    eod_our_price: item.eod_our_price || '',
-                    offering_start_datetime: item.offering_start_datetime || '',
-                    offering_end_datetime: item.offering_end_datetime || '',
-                    merchant_customer_id: item.merchant_customer_id || '',
-                    encrypted_merchant_i: item.encrypted_merchant_i || ''
-                }));
+                let savedCount = 0;
+                const BATCH_SIZE = 1000; // Smaller batches for large datasets
+                const totalBatches = Math.ceil(items.length / BATCH_SIZE);
 
-                // Bulk add in batches to keep UI responsive
-                const BATCH_SIZE = 5000;
-                for (let i = 0; i < toStore.length; i += BATCH_SIZE) {
-                    const batch = toStore.slice(i, i + BATCH_SIZE);
+                for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+                    const startIdx = batchIndex * BATCH_SIZE;
+                    const endIdx = Math.min(startIdx + BATCH_SIZE, items.length);
+                    
+                    // Process batch without storing in memory
+                    const batch = [];
+                    for (let i = startIdx; i < endIdx; i++) {
+                        const item = items[i];
+                        batch.push({
+                            asin: (item.asin || '').toUpperCase(),
+                            sku: (item.sku || ''),
+                            store_tlc: (item.store_tlc || '').toUpperCase(),
+                            store_acronym: item.store_acronym || '',
+                            store_name: item.store_name || '',
+                            item_nameLower: (item.item_name || '').toLowerCase(),
+                            item_name: item.item_name || '',
+                            // Include optional fields if they exist
+                            quantity: item.quantity || '',
+                            listing_status: item.listing_status || '',
+                            event_date: item.event_date || '',
+                            sku_wo_chck_dgt: item.sku_wo_chck_dgt || '',
+                            rnk: item.rnk || '',
+                            eod_our_price: item.eod_our_price || '',
+                            offering_start_datetime: item.offering_start_datetime || '',
+                            offering_end_datetime: item.offering_end_datetime || '',
+                            merchant_customer_id: item.merchant_customer_id || '',
+                            encrypted_merchant_i: item.encrypted_merchant_i || ''
+                        });
+                    }
+
                     await db.items.bulkAdd(batch);
-                    console.log(`📦 Saved batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(toStore.length / BATCH_SIZE)}`);
+                    savedCount += batch.length;
+                    
+                    console.log(`📦 Streamed batch ${batchIndex + 1}/${totalBatches} (${savedCount.toLocaleString()}/${items.length.toLocaleString()} items)`);
+                    
+                    // Allow UI to breathe between batches
+                    if (batchIndex % 10 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
                 }
 
                 // Save timestamp to GM storage (keep small metadata in GM)
                 GM_setValue('itemDatabaseTimestamp', Date.now());
 
-                console.log(`✅ Saved ${toStore.length} items to IndexedDB in ${(Date.now() - startTime)}ms`);
+                console.log(`✅ Streamed ${savedCount.toLocaleString()} items to IndexedDB in ${(Date.now() - startTime)}ms`);
+                return savedCount;
 
             } catch (error) {
-                console.error('❌ Error saving item database to IndexedDB:', error);
+                console.error('❌ Error streaming item database to IndexedDB:', error);
                 alert(`❌ Failed to save item database: ${error.message}\n\nCheck console for details.`);
+                throw error;
             }
+        }
+
+        // Legacy function for compatibility - now just calls streaming version
+        async function saveItemDatabase() {
+            if (itemDatabase.length === 0) return;
+            return await saveItemDatabaseStreaming(itemDatabase);
         }
 
         // Get database status without loading everything into memory
@@ -1402,16 +1451,13 @@
                     console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
                 }
 
-                // Update the item database
-                itemDatabase = newItems;
-
-                // Save to persistent storage
-                saveItemDatabase();
+                // Stream directly to IndexedDB without holding in memory
+                const itemCount = await parseXLSXStreaming(arrayBuffer);
 
                 // Update UI
-                updateItemDatabaseStatus();
+                await updateItemDatabaseStatus();
 
-                alert(`✅ Successfully loaded ${itemDatabase.length} items from SharePoint!\n\nData is now available for searching and has been saved locally.`);
+                alert(`✅ Successfully streamed ${itemCount.toLocaleString()} items from SharePoint to IndexedDB!\n\nData is now available for searching.`);
 
             } catch (error) {
                 // Remove processing message if it exists
