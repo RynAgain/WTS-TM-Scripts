@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WFM Scanner App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛒 WFM Scanner App</h1>
+            <p>Systematically scan Whole Foods Market items across stores</p>
+        </header>
+
+        <main>
+            <!-- Configuration Section -->
+            <section class="config-section">
+                <h2>📋 Configuration</h2>
+                
+                <div class="config-group">
+                    <h3>Store Mapping</h3>
+                    <div class="file-input-group">
+                        <button id="selectStoreMappingBtn" class="file-btn">
+                            📁 Select Store Mapping CSV
+                        </button>
+                        <span id="storeMappingFile" class="file-status">No file selected</span>
+                    </div>
+                    <p class="help-text">CSV file with StoreCode and StoreId columns (e.g., ABC,12345)</p>
+                </div>
+
+                <div class="config-group">
+                    <h3>Item List</h3>
+                    <div class="file-input-group">
+                        <button id="selectItemListBtn" class="file-btn">
+                            📊 Select Item List File
+                        </button>
+                        <span id="itemListFile" class="file-status">No file selected</span>
+                    </div>
+                    <p class="help-text">Excel/CSV file with store codes and ASIN columns</p>
+                </div>
+
+                <div class="config-group">
+                    <h3>Scan Settings</h3>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label for="delayBetweenItems">Delay between items (ms):</label>
+                            <input type="number" id="delayBetweenItems" value="2000" min="500" max="10000">
+                        </div>
+                        <div class="setting-item">
+                            <label for="delayBetweenStores">Delay between stores (ms):</label>
+                            <input type="number" id="delayBetweenStores" value="5000" min="1000" max="30000">
+                        </div>
+                        <div class="setting-item">
+                            <label for="pageTimeout">Page timeout (ms):</label>
+                            <input type="number" id="pageTimeout" value="30000" min="5000" max="60000">
+                        </div>
+                        <div class="setting-item">
+                            <label for="maxRetries">Max retries per item:</label>
+                            <input type="number" id="maxRetries" value="3" min="1" max="10">
+                        </div>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <label>
+                            <input type="checkbox" id="headlessMode" checked>
+                            Run in headless mode (faster, no browser window)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="captureScreenshots">
+                            Capture screenshots on errors
+                        </label>
+                        <label>
+                            <input type="checkbox" id="skipExistingResults">
+                            Skip items with existing results
+                        </label>
+                    </div>
+                    
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label for="maxConcurrentAgents">Max Concurrent Agents:</label>
+                            <input type="number" id="maxConcurrentAgents" min="1" max="5" value="1">
+                            <small>Number of parallel browser contexts (1 = sequential, 2-5 = parallel)</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control Section -->
+            <section class="control-section">
+                <h2>🎮 Controls</h2>
+                <div class="control-buttons">
+                    <button id="startScanBtn" class="primary-btn" disabled>
+                        🚀 Start Scan
+                    </button>
+                    <button id="stopScanBtn" class="danger-btn" disabled>
+                        🛑 Stop Scan
+                    </button>
+                    <button id="exportResultsBtn" class="secondary-btn" disabled>
+                        📤 Export Results
+                    </button>
+                </div>
+            </section>
+
+            <!-- Progress Section -->
+            <section class="progress-section">
+                <h2>📊 Progress</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <div class="progress-text">
+                        <span id="progressText">Ready to start</span>
+                        <span id="progressPercent">0%</span>
+                    </div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Current Store:</span>
+                        <span id="currentStore" class="stat-value">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Items Processed:</span>
+                        <span id="itemsProcessed" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Items:</span>
+                        <span id="totalItems" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Success Rate:</span>
+                        <span id="successRate" class="stat-value">0%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Errors:</span>
+                        <span id="errorCount" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Elapsed Time:</span>
+                        <span id="elapsedTime" class="stat-value">00:00:00</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="results-section">
+                <h2>📋 Recent Results</h2>
+                <div class="results-container">
+                    <div id="resultsTable" class="results-table">
+                        <div class="table-header">
+                            <span>Store</span>
+                            <span>ASIN</span>
+                            <span>Item Name</span>
+                            <span>Extracted Name</span>
+                            <span>Price</span>
+                            <span>Nutrition</span>
+                            <span>Ingredients</span>
+                            <span>Add to Cart</span>
+                            <span>Available</span>
+                            <span>Variations</span>
+                            <span>Bundle</span>
+                            <span>Bundle Parts</span>
+                            <span>Status</span>
+                            <span>Load Time</span>
+                            <span>Timestamp</span>
+                        </div>
+                        <div id="resultsBody" class="table-body">
+                            <div class="no-results">No results yet</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Log Section -->
+            <section class="log-section">
+                <h2>📝 Activity Log</h2>
+                <div class="log-container">
+                    <div id="logOutput" class="log-output"></div>
+                    <div class="log-controls">
+                        <button id="clearLogBtn" class="small-btn">Clear Log</button>
+                        <button id="exportLogBtn" class="small-btn">Export Log</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
