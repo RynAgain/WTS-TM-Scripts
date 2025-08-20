@@ -379,44 +379,75 @@
                 return;
             }
             
-            // Fetch the latest version from GitHub
-            const response = await fetch(GITHUB_VERSION_URL, {
-                method: 'GET',
-                cache: 'no-cache',
-                headers: {
-                    'Cache-Control': 'no-cache'
-                }
+            // Use GM_xmlhttpRequest to bypass CORS restrictions
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: GITHUB_VERSION_URL,
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'User-Agent': 'WTS-Tools-Userscript'
+                    },
+                    onload: function(response) {
+                        try {
+                            if (response.status !== 200) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            
+                            const scriptContent = response.responseText;
+                            
+                            // Extract version from the script content
+                            const versionMatch = scriptContent.match(/@version\s+([^\s]+)/);
+                            if (!versionMatch) {
+                                throw new Error('Could not extract version from GitHub script');
+                            }
+                            
+                            const latestVersion = versionMatch[1].trim();
+                            console.log(`📋 Current version: ${CURRENT_VERSION}`);
+                            console.log(`📋 Latest version: ${latestVersion}`);
+                            
+                            // Update last check timestamp
+                            GM_setValue('lastVersionCheck', now);
+                            
+                            // Compare versions
+                            if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
+                                console.log('🆕 New version available!');
+                                showUpdateNotification(latestVersion);
+                            } else {
+                                console.log('✅ Script is up to date');
+                                if (showNoUpdateMessage) {
+                                    alert(`✅ You're running the latest version!\n\nCurrent: ${CURRENT_VERSION}\nLatest: ${latestVersion}`);
+                                }
+                            }
+                            
+                            resolve();
+                        } catch (error) {
+                            console.error('❌ Error processing version check response:', error);
+                            if (showNoUpdateMessage) {
+                                alert(`❌ Failed to check for updates: ${error.message}\n\nPlease check your internet connection or try again later.`);
+                            }
+                            reject(error);
+                        }
+                    },
+                    onerror: function(error) {
+                        console.error('❌ Network error checking for updates:', error);
+                        const errorMessage = 'Network error occurred while checking for updates';
+                        if (showNoUpdateMessage) {
+                            alert(`❌ Failed to check for updates: ${errorMessage}\n\nPlease check your internet connection or try again later.`);
+                        }
+                        reject(new Error(errorMessage));
+                    },
+                    ontimeout: function() {
+                        console.error('❌ Timeout error checking for updates');
+                        const errorMessage = 'Request timed out while checking for updates';
+                        if (showNoUpdateMessage) {
+                            alert(`❌ Failed to check for updates: ${errorMessage}\n\nPlease try again later.`);
+                        }
+                        reject(new Error(errorMessage));
+                    },
+                    timeout: 10000 // 10 second timeout
+                });
             });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            const scriptContent = await response.text();
-            
-            // Extract version from the script content
-            const versionMatch = scriptContent.match(/@version\s+([^\s]+)/);
-            if (!versionMatch) {
-                throw new Error('Could not extract version from GitHub script');
-            }
-            
-            const latestVersion = versionMatch[1].trim();
-            console.log(`📋 Current version: ${CURRENT_VERSION}`);
-            console.log(`📋 Latest version: ${latestVersion}`);
-            
-            // Update last check timestamp
-            GM_setValue('lastVersionCheck', now);
-            
-            // Compare versions
-            if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
-                console.log('🆕 New version available!');
-                showUpdateNotification(latestVersion);
-            } else {
-                console.log('✅ Script is up to date');
-                if (showNoUpdateMessage) {
-                    alert(`✅ You're running the latest version!\n\nCurrent: ${CURRENT_VERSION}\nLatest: ${latestVersion}`);
-                }
-            }
             
         } catch (error) {
             console.error('❌ Error checking for updates:', error);
@@ -1819,53 +1850,82 @@
         const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
 
         const panel = document.createElement('div');
-        panel.id = 'wts-panel'; // FIXED: Add unique ID for reliable detection
+        panel.id = 'wts-panel';
         panel.style.position = 'fixed';
         panel.style.top = savedPosition.y + 'px';
         panel.style.left = savedPosition.x + 'px';
-        panel.style.zIndex = '2147483647'; // FIXED: Use maximum z-index to stay above WFM overlays
-        panel.style.background = '#f9f9f9';
-        panel.style.border = '1px solid #ccc';
-        panel.style.borderRadius = '8px';
-        panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+        panel.style.zIndex = '2147483647';
+        panel.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        panel.style.border = 'none';
+        panel.style.borderRadius = '16px';
+        panel.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.1)';
         panel.style.padding = '0';
         panel.style.display = 'flex';
         panel.style.flexDirection = 'column';
-        panel.style.fontFamily = 'sans-serif';
-        panel.style.transition = 'box-shadow 0.2s ease';
+        panel.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+        panel.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
         panel.style.userSelect = 'none';
+        panel.style.backdropFilter = 'blur(10px)';
+        panel.style.minWidth = '280px';
+        panel.style.maxWidth = '320px';
 
         // Create drag handle header
         const dragHeader = document.createElement('div');
         dragHeader.style.display = 'flex';
         dragHeader.style.alignItems = 'center';
-        dragHeader.style.padding = '8px 12px';
-        dragHeader.style.background = '#e9ecef';
-        dragHeader.style.borderRadius = '8px 8px 0 0';
+        dragHeader.style.justifyContent = 'space-between';
+        dragHeader.style.padding = '16px 20px';
+        dragHeader.style.background = 'rgba(255, 255, 255, 0.15)';
+        dragHeader.style.borderRadius = '16px 16px 0 0';
         dragHeader.style.cursor = 'move';
-        dragHeader.style.borderBottom = '1px solid #dee2e6';
-        dragHeader.style.fontSize = '14px';
-        dragHeader.style.fontWeight = 'bold';
-        dragHeader.style.color = '#495057';
+        dragHeader.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
+        dragHeader.style.fontSize = '16px';
+        dragHeader.style.fontWeight = '600';
+        dragHeader.style.color = '#ffffff';
+        dragHeader.style.backdropFilter = 'blur(10px)';
+        dragHeader.style.transition = 'all 0.2s ease';
+
+        const headerLeft = document.createElement('div');
+        headerLeft.style.display = 'flex';
+        headerLeft.style.alignItems = 'center';
 
         const dragIcon = document.createElement('span');
-        dragIcon.textContent = '≡';
-        dragIcon.style.marginRight = '8px';
-        dragIcon.style.fontSize = '16px';
-        dragIcon.style.color = '#6c757d';
+        dragIcon.textContent = '⋮⋮';
+        dragIcon.style.marginRight = '12px';
+        dragIcon.style.fontSize = '18px';
+        dragIcon.style.color = 'rgba(255, 255, 255, 0.8)';
+        dragIcon.style.transform = 'rotate(90deg)';
+        dragIcon.style.transition = 'all 0.2s ease';
 
         const headerTitle = document.createElement('span');
         headerTitle.textContent = 'WTS Tools';
+        headerTitle.style.fontSize = '16px';
+        headerTitle.style.fontWeight = '600';
+        headerTitle.style.letterSpacing = '0.5px';
 
-        dragHeader.appendChild(dragIcon);
-        dragHeader.appendChild(headerTitle);
+        const versionBadge = document.createElement('span');
+        versionBadge.textContent = 'v1.3.013';
+        versionBadge.style.fontSize = '11px';
+        versionBadge.style.padding = '2px 8px';
+        versionBadge.style.background = 'rgba(255, 255, 255, 0.2)';
+        versionBadge.style.borderRadius = '12px';
+        versionBadge.style.color = 'rgba(255, 255, 255, 0.9)';
+        versionBadge.style.fontWeight = '500';
+
+        headerLeft.appendChild(dragIcon);
+        headerLeft.appendChild(headerTitle);
+        dragHeader.appendChild(headerLeft);
+        dragHeader.appendChild(versionBadge);
 
         // Create content container
         const contentContainer = document.createElement('div');
-        contentContainer.style.padding = '12px';
+        contentContainer.style.padding = '20px';
         contentContainer.style.display = 'flex';
         contentContainer.style.flexDirection = 'column';
-        contentContainer.style.gap = '8px';
+        contentContainer.style.gap = '12px';
+        contentContainer.style.background = 'rgba(255, 255, 255, 0.95)';
+        contentContainer.style.borderRadius = '0 0 16px 16px';
+        contentContainer.style.backdropFilter = 'blur(10px)';
 
         // Drag functionality variables
         let isDragging = false;
@@ -1878,11 +1938,13 @@
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
 
-            // Visual feedback
-            panel.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
-            panel.style.transform = 'scale(1.02)';
-            dragHeader.style.background = '#dee2e6';
-            document.body.style.cursor = 'move';
+            // Enhanced visual feedback
+            panel.style.boxShadow = '0 25px 50px rgba(0,0,0,0.25), 0 12px 24px rgba(0,0,0,0.15)';
+            panel.style.transform = 'scale(1.05) rotate(1deg)';
+            dragHeader.style.background = 'rgba(255, 255, 255, 0.25)';
+            dragIcon.style.color = '#ffffff';
+            dragIcon.style.transform = 'rotate(90deg) scale(1.2)';
+            document.body.style.cursor = 'grabbing';
 
             e.preventDefault();
         };
@@ -1918,10 +1980,12 @@
             const position = { x: rect.left, y: rect.top };
             GM_setValue('wts_panel_position', position);
 
-            // Reset visual feedback
-            panel.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-            panel.style.transform = 'scale(1)';
-            dragHeader.style.background = '#e9ecef';
+            // Reset visual feedback with smooth transition
+            panel.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.1)';
+            panel.style.transform = 'scale(1) rotate(0deg)';
+            dragHeader.style.background = 'rgba(255, 255, 255, 0.15)';
+            dragIcon.style.color = 'rgba(255, 255, 255, 0.8)';
+            dragIcon.style.transform = 'rotate(90deg) scale(1)';
             document.body.style.cursor = '';
         };
 
@@ -1962,12 +2026,32 @@
 
         const exportBtn = document.createElement('button');
         exportBtn.textContent = '📦 Export ASIN Data';
-        exportBtn.style.padding = '10px';
-        exportBtn.style.backgroundColor = '#28a745';
+        exportBtn.style.padding = '14px 20px';
+        exportBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
         exportBtn.style.color = '#fff';
         exportBtn.style.border = 'none';
-        exportBtn.style.borderRadius = '5px';
+        exportBtn.style.borderRadius = '12px';
         exportBtn.style.cursor = 'pointer';
+        exportBtn.style.fontSize = '14px';
+        exportBtn.style.fontWeight = '600';
+        exportBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        exportBtn.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.3)';
+        exportBtn.style.letterSpacing = '0.5px';
+        exportBtn.style.position = 'relative';
+        exportBtn.style.overflow = 'hidden';
+        
+        // Add hover effects
+        exportBtn.addEventListener('mouseenter', () => {
+            exportBtn.style.transform = 'translateY(-2px)';
+            exportBtn.style.boxShadow = '0 8px 20px rgba(40, 167, 69, 0.4)';
+            exportBtn.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
+        });
+        
+        exportBtn.addEventListener('mouseleave', () => {
+            exportBtn.style.transform = 'translateY(0)';
+            exportBtn.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.3)';
+            exportBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+        });
 
         exportBtn.addEventListener('click', () => {
             console.log('📦 Export button clicked - using comprehensive data extraction');
@@ -1997,12 +2081,30 @@
 
         const refreshBtn = document.createElement('button');
         refreshBtn.textContent = '🔄 Refresh Data';
-        refreshBtn.style.padding = '10px';
-        refreshBtn.style.backgroundColor = '#007bff';
+        refreshBtn.style.padding = '14px 20px';
+        refreshBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)';
         refreshBtn.style.color = '#fff';
         refreshBtn.style.border = 'none';
-        refreshBtn.style.borderRadius = '5px';
+        refreshBtn.style.borderRadius = '12px';
         refreshBtn.style.cursor = 'pointer';
+        refreshBtn.style.fontSize = '14px';
+        refreshBtn.style.fontWeight = '600';
+        refreshBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        refreshBtn.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
+        refreshBtn.style.letterSpacing = '0.5px';
+        
+        // Add hover effects
+        refreshBtn.addEventListener('mouseenter', () => {
+            refreshBtn.style.transform = 'translateY(-2px)';
+            refreshBtn.style.boxShadow = '0 8px 20px rgba(0, 123, 255, 0.4)';
+            refreshBtn.style.background = 'linear-gradient(135deg, #0056b3 0%, #520dc2 100%)';
+        });
+        
+        refreshBtn.addEventListener('mouseleave', () => {
+            refreshBtn.style.transform = 'translateY(0)';
+            refreshBtn.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
+            refreshBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)';
+        });
 
         const refreshData = () => {
             console.log('🔄 Refresh button clicked - using comprehensive data extraction');
@@ -2032,12 +2134,30 @@
         // Create CSV file upload button and input
         const uploadBtn = document.createElement('button');
         uploadBtn.textContent = '📁 Upload Store Mapping (CSV)';
-        uploadBtn.style.padding = '10px';
-        uploadBtn.style.backgroundColor = '#6f42c1';
+        uploadBtn.style.padding = '14px 20px';
+        uploadBtn.style.background = 'linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%)';
         uploadBtn.style.color = '#fff';
         uploadBtn.style.border = 'none';
-        uploadBtn.style.borderRadius = '5px';
+        uploadBtn.style.borderRadius = '12px';
         uploadBtn.style.cursor = 'pointer';
+        uploadBtn.style.fontSize = '14px';
+        uploadBtn.style.fontWeight = '600';
+        uploadBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        uploadBtn.style.boxShadow = '0 4px 12px rgba(111, 66, 193, 0.3)';
+        uploadBtn.style.letterSpacing = '0.5px';
+        
+        // Add hover effects
+        uploadBtn.addEventListener('mouseenter', () => {
+            uploadBtn.style.transform = 'translateY(-2px)';
+            uploadBtn.style.boxShadow = '0 8px 20px rgba(111, 66, 193, 0.4)';
+            uploadBtn.style.background = 'linear-gradient(135deg, #5a2d91 0%, #c73650 100%)';
+        });
+        
+        uploadBtn.addEventListener('mouseleave', () => {
+            uploadBtn.style.transform = 'translateY(0)';
+            uploadBtn.style.boxShadow = '0 4px 12px rgba(111, 66, 193, 0.3)';
+            uploadBtn.style.background = 'linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%)';
+        });
 
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -2218,31 +2338,59 @@
 
         // Create status display for store mappings
         const statusDiv = document.createElement('div');
-        statusDiv.style.fontSize = '12px';
-        statusDiv.style.color = '#666';
+        statusDiv.style.fontSize = '13px';
+        statusDiv.style.color = '#6c757d';
         statusDiv.style.textAlign = 'center';
-        statusDiv.style.marginTop = '4px';
+        statusDiv.style.marginTop = '8px';
+        statusDiv.style.padding = '8px 12px';
+        statusDiv.style.background = 'rgba(108, 117, 125, 0.1)';
+        statusDiv.style.borderRadius = '8px';
+        statusDiv.style.border = '1px solid rgba(108, 117, 125, 0.2)';
+        statusDiv.style.fontWeight = '500';
+        statusDiv.style.transition = 'all 0.2s ease';
         statusDiv.textContent = 'No store mappings loaded';
 
         // Create status display for item database
         const itemDatabaseStatusDiv = document.createElement('div');
-        itemDatabaseStatusDiv.style.fontSize = '12px';
-        itemDatabaseStatusDiv.style.color = '#666';
+        itemDatabaseStatusDiv.style.fontSize = '13px';
+        itemDatabaseStatusDiv.style.color = '#6c757d';
         itemDatabaseStatusDiv.style.textAlign = 'center';
-        itemDatabaseStatusDiv.style.marginTop = '4px';
+        itemDatabaseStatusDiv.style.marginTop = '8px';
+        itemDatabaseStatusDiv.style.padding = '8px 12px';
+        itemDatabaseStatusDiv.style.background = 'rgba(108, 117, 125, 0.1)';
+        itemDatabaseStatusDiv.style.borderRadius = '8px';
+        itemDatabaseStatusDiv.style.border = '1px solid rgba(108, 117, 125, 0.2)';
+        itemDatabaseStatusDiv.style.fontWeight = '500';
+        itemDatabaseStatusDiv.style.transition = 'all 0.2s ease';
         itemDatabaseStatusDiv.textContent = 'No item database loaded';
 
         // Create CSRF settings button
         const csrfSettingsBtn = document.createElement('button');
         csrfSettingsBtn.textContent = '⚙️ CSRF Settings';
-        csrfSettingsBtn.style.padding = '8px';
-        csrfSettingsBtn.style.backgroundColor = '#6c757d';
+        csrfSettingsBtn.style.padding = '10px 16px';
+        csrfSettingsBtn.style.background = 'linear-gradient(135deg, #6c757d 0%, #495057 100%)';
         csrfSettingsBtn.style.color = '#fff';
         csrfSettingsBtn.style.border = 'none';
-        csrfSettingsBtn.style.borderRadius = '4px';
+        csrfSettingsBtn.style.borderRadius = '8px';
         csrfSettingsBtn.style.cursor = 'pointer';
-        csrfSettingsBtn.style.fontSize = '12px';
+        csrfSettingsBtn.style.fontSize = '13px';
+        csrfSettingsBtn.style.fontWeight = '500';
         csrfSettingsBtn.style.marginTop = '8px';
+        csrfSettingsBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        csrfSettingsBtn.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.2)';
+        
+        // Add hover effects
+        csrfSettingsBtn.addEventListener('mouseenter', () => {
+            csrfSettingsBtn.style.transform = 'translateY(-1px)';
+            csrfSettingsBtn.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.3)';
+            csrfSettingsBtn.style.background = 'linear-gradient(135deg, #5a6268 0%, #3d4043 100%)';
+        });
+        
+        csrfSettingsBtn.addEventListener('mouseleave', () => {
+            csrfSettingsBtn.style.transform = 'translateY(0)';
+            csrfSettingsBtn.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.2)';
+            csrfSettingsBtn.style.background = 'linear-gradient(135deg, #6c757d 0%, #495057 100%)';
+        });
 
         // CSRF Settings Modal
         function showCSRFSettings() {
@@ -2381,14 +2529,30 @@
         // Version check button
         const versionCheckBtn = document.createElement('button');
         versionCheckBtn.textContent = '🔍 Check for Updates';
-        versionCheckBtn.style.padding = '8px';
-        versionCheckBtn.style.backgroundColor = '#17a2b8';
+        versionCheckBtn.style.padding = '10px 16px';
+        versionCheckBtn.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
         versionCheckBtn.style.color = '#fff';
         versionCheckBtn.style.border = 'none';
-        versionCheckBtn.style.borderRadius = '4px';
+        versionCheckBtn.style.borderRadius = '8px';
         versionCheckBtn.style.cursor = 'pointer';
-        versionCheckBtn.style.fontSize = '12px';
+        versionCheckBtn.style.fontSize = '13px';
+        versionCheckBtn.style.fontWeight = '500';
         versionCheckBtn.style.marginTop = '4px';
+        versionCheckBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        versionCheckBtn.style.boxShadow = '0 2px 8px rgba(23, 162, 184, 0.2)';
+        
+        // Add hover effects
+        versionCheckBtn.addEventListener('mouseenter', () => {
+            versionCheckBtn.style.transform = 'translateY(-1px)';
+            versionCheckBtn.style.boxShadow = '0 4px 12px rgba(23, 162, 184, 0.3)';
+            versionCheckBtn.style.background = 'linear-gradient(135deg, #138496 0%, #0f6674 100%)';
+        });
+        
+        versionCheckBtn.addEventListener('mouseleave', () => {
+            versionCheckBtn.style.transform = 'translateY(0)';
+            versionCheckBtn.style.boxShadow = '0 2px 8px rgba(23, 162, 184, 0.2)';
+            versionCheckBtn.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
+        });
 
         versionCheckBtn.addEventListener('click', async () => {
             versionCheckBtn.textContent = '🔄 Checking...';
@@ -2408,14 +2572,30 @@
         // Debug info button for troubleshooting
         const debugBtn = document.createElement('button');
         debugBtn.textContent = '🐛 Debug Info';
-        debugBtn.style.padding = '8px';
-        debugBtn.style.backgroundColor = '#e83e8c';
+        debugBtn.style.padding = '10px 16px';
+        debugBtn.style.background = 'linear-gradient(135deg, #e83e8c 0%, #dc3545 100%)';
         debugBtn.style.color = '#fff';
         debugBtn.style.border = 'none';
-        debugBtn.style.borderRadius = '4px';
+        debugBtn.style.borderRadius = '8px';
         debugBtn.style.cursor = 'pointer';
-        debugBtn.style.fontSize = '12px';
+        debugBtn.style.fontSize = '13px';
+        debugBtn.style.fontWeight = '500';
         debugBtn.style.marginTop = '4px';
+        debugBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        debugBtn.style.boxShadow = '0 2px 8px rgba(232, 62, 140, 0.2)';
+        
+        // Add hover effects
+        debugBtn.addEventListener('mouseenter', () => {
+            debugBtn.style.transform = 'translateY(-1px)';
+            debugBtn.style.boxShadow = '0 4px 12px rgba(232, 62, 140, 0.3)';
+            debugBtn.style.background = 'linear-gradient(135deg, #d91a72 0%, #c82333 100%)';
+        });
+        
+        debugBtn.addEventListener('mouseleave', () => {
+            debugBtn.style.transform = 'translateY(0)';
+            debugBtn.style.boxShadow = '0 2px 8px rgba(232, 62, 140, 0.2)';
+            debugBtn.style.background = 'linear-gradient(135deg, #e83e8c 0%, #dc3545 100%)';
+        });
 
         debugBtn.addEventListener('click', async () => {
             const status = await getItemDatabaseStatus();
@@ -2686,20 +2866,40 @@
         itemSearchInput.type = 'text';
         itemSearchInput.placeholder = 'Enter search term...';
         itemSearchInput.style.width = '100%';
-        itemSearchInput.style.padding = '8px';
-        itemSearchInput.style.border = '1px solid #ccc';
-        itemSearchInput.style.borderRadius = '4px';
-        itemSearchInput.style.fontSize = '12px';
+        itemSearchInput.style.padding = '12px 16px';
+        itemSearchInput.style.border = '2px solid rgba(108, 117, 125, 0.2)';
+        itemSearchInput.style.borderRadius = '10px';
+        itemSearchInput.style.fontSize = '14px';
+        itemSearchInput.style.fontWeight = '500';
         itemSearchInput.style.boxSizing = 'border-box';
-        itemSearchInput.style.marginBottom = '4px';
+        itemSearchInput.style.marginBottom = '8px';
+        itemSearchInput.style.background = 'rgba(255, 255, 255, 0.9)';
+        itemSearchInput.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        itemSearchInput.style.color = '#495057';
+        
+        // Add focus effects
+        itemSearchInput.addEventListener('focus', () => {
+            itemSearchInput.style.border = '2px solid #667eea';
+            itemSearchInput.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+            itemSearchInput.style.background = '#ffffff';
+        });
+        
+        itemSearchInput.addEventListener('blur', () => {
+            itemSearchInput.style.border = '2px solid rgba(108, 117, 125, 0.2)';
+            itemSearchInput.style.boxShadow = 'none';
+            itemSearchInput.style.background = 'rgba(255, 255, 255, 0.9)';
+        });
 
         const searchResultsContainer = document.createElement('div');
         searchResultsContainer.style.maxHeight = '200px';
         searchResultsContainer.style.overflowY = 'auto';
-        searchResultsContainer.style.border = '1px solid #ddd';
-        searchResultsContainer.style.borderRadius = '4px';
-        searchResultsContainer.style.backgroundColor = '#f8f9fa';
+        searchResultsContainer.style.border = '2px solid rgba(108, 117, 125, 0.1)';
+        searchResultsContainer.style.borderRadius = '12px';
+        searchResultsContainer.style.background = 'rgba(255, 255, 255, 0.95)';
+        searchResultsContainer.style.backdropFilter = 'blur(10px)';
+        searchResultsContainer.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)';
         searchResultsContainer.style.display = 'none';
+        searchResultsContainer.style.marginTop = '8px';
 
         // Search functionality - now async
         async function performSearch() {
@@ -3053,11 +3253,15 @@
             const counter = document.createElement('div');
             counter.id = 'asin-card-counter';
             counter.style.fontSize = '13px';
-            counter.style.color = '#333';
-            counter.style.marginTop = '8px';
-            counter.style.padding = '4px 0';
-            counter.style.borderTop = '1px solid #dee2e6';
+            counter.style.color = '#495057';
+            counter.style.marginTop = '12px';
+            counter.style.padding = '12px 16px';
+            counter.style.borderTop = '1px solid rgba(108, 117, 125, 0.2)';
             counter.style.textAlign = 'center';
+            counter.style.background = 'rgba(102, 126, 234, 0.05)';
+            counter.style.borderRadius = '0 0 12px 12px';
+            counter.style.fontWeight = '500';
+            counter.style.letterSpacing = '0.3px';
 
             // Find the content container and append counter
             const contentContainer = wtsPanel.querySelector('div:last-child');
