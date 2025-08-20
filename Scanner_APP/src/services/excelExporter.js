@@ -20,14 +20,25 @@ class ExcelExporter {
             this.workbook.created = new Date();
             this.workbook.modified = new Date();
             
-            // Create main results worksheet
-            await this.createResultsWorksheet(results);
+            // Detect data type based on first result
+            const isMerchandisingMode = results.length > 0 && results[0].mode === 'merchandising';
             
-            // Create summary worksheet
-            await this.createSummaryWorksheet(results);
-            
-            // Create store breakdown worksheet
-            await this.createStoreBreakdownWorksheet(results);
+            if (isMerchandisingMode) {
+                console.log('📊 Detected merchandising mode data, creating merchandising worksheets...');
+                
+                // Create merchandising-specific worksheets
+                await this.createMerchandisingResultsWorksheet(results);
+                await this.createMerchandisingSummaryWorksheet(results);
+                await this.createShovelerDetailsWorksheet(results);
+                
+            } else {
+                console.log('📊 Detected item mode data, creating item worksheets...');
+                
+                // Create item mode worksheets (existing functionality)
+                await this.createResultsWorksheet(results);
+                await this.createSummaryWorksheet(results);
+                await this.createStoreBreakdownWorksheet(results);
+            }
             
             // Save the workbook
             await this.workbook.xlsx.writeFile(filePath);
@@ -462,6 +473,250 @@ class ExcelExporter {
             console.warn('⚠️ Error during file cleanup:', error.message);
             // Don't throw error - cleanup failure shouldn't prevent export success
         }
+    }
+
+    async createMerchandisingResultsWorksheet(results) {
+        const worksheet = this.workbook.addWorksheet('Merchandising Results');
+        
+        // Define columns for merchandising data
+        worksheet.columns = [
+            { header: 'Store Code', key: 'store', width: 12 },
+            { header: 'Status', key: 'status', width: 12 },
+            { header: 'Load Time (ms)', key: 'loadTime', width: 15 },
+            { header: 'Shovelers Found', key: 'shovelerCount', width: 16 },
+            { header: 'Total ASINs', key: 'totalASINs', width: 12 },
+            { header: 'Error Message', key: 'error', width: 50 },
+            { header: 'Timestamp', key: 'timestamp', width: 20 }
+        ];
+        
+        // Style the header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: '366092' }
+        };
+        headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        // Add data rows
+        results.forEach((result, index) => {
+            const row = worksheet.addRow({
+                store: result.store,
+                status: result.success ? 'SUCCESS' : 'FAILED',
+                loadTime: result.loadTime || '',
+                shovelerCount: result.shovelers ? result.shovelers.length : 0,
+                totalASINs: result.totalASINs || 0,
+                error: result.error || '',
+                timestamp: new Date(result.timestamp).toLocaleString()
+            });
+            
+            // Color code rows based on success/failure
+            if (result.success) {
+                row.getCell('status').fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'C6EFCE' }
+                };
+                row.getCell('status').font = { color: { argb: '006100' } };
+            } else {
+                row.getCell('status').fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFC7CE' }
+                };
+                row.getCell('status').font = { color: { argb: '9C0006' } };
+            }
+        });
+        
+        // Add borders to all cells
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+        });
+        
+        // Freeze the header row
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+        
+        console.log(`✅ Merchandising results worksheet created with ${results.length} stores`);
+    }
+
+    async createMerchandisingSummaryWorksheet(results) {
+        const worksheet = this.workbook.addWorksheet('Merchandising Summary');
+        
+        // Calculate summary statistics
+        const totalStores = results.length;
+        const successfulStores = results.filter(r => r.success).length;
+        const failedStores = totalStores - successfulStores;
+        const successRate = totalStores > 0 ? ((successfulStores / totalStores) * 100).toFixed(2) : 0;
+        
+        const avgLoadTime = results
+            .filter(r => r.success && r.loadTime)
+            .reduce((sum, r, _, arr) => sum + r.loadTime / arr.length, 0);
+        
+        const scanDate = new Date().toLocaleString();
+        
+        // Calculate merchandising-specific statistics
+        const successfulResults = results.filter(r => r.success);
+        const totalShovelers = successfulResults.reduce((sum, r) => sum + (r.shovelers ? r.shovelers.length : 0), 0);
+        const totalASINs = successfulResults.reduce((sum, r) => sum + (r.totalASINs || 0), 0);
+        const avgShovelers = successfulResults.length > 0 ? (totalShovelers / successfulResults.length).toFixed(1) : 0;
+        const avgASINsPerStore = successfulResults.length > 0 ? (totalASINs / successfulResults.length).toFixed(1) : 0;
+        const avgASINsPerShoveler = totalShovelers > 0 ? (totalASINs / totalShovelers).toFixed(1) : 0;
+        
+        // Create summary table
+        const summaryData = [
+            ['Merchandising Scan Summary', ''],
+            ['', ''],
+            ['Scan Date', scanDate],
+            ['Total Stores Processed', totalStores],
+            ['Successful Stores', successfulStores],
+            ['Failed Stores', failedStores],
+            ['Success Rate', `${successRate}%`],
+            ['Average Load Time', avgLoadTime > 0 ? `${Math.round(avgLoadTime)}ms` : 'N/A'],
+            ['', ''],
+            ['Shoveler Analysis', ''],
+            ['Total Shovelers Found', totalShovelers],
+            ['Average Shovelers per Store', avgShovelers],
+            ['Total ASINs Extracted', totalASINs],
+            ['Average ASINs per Store', avgASINsPerStore],
+            ['Average ASINs per Shoveler', avgASINsPerShoveler],
+            ['', ''],
+            ['Status Breakdown', ''],
+            ['✅ Success', successfulStores],
+            ['❌ Failed', failedStores]
+        ];
+        
+        // Add data to worksheet
+        summaryData.forEach((row, index) => {
+            const wsRow = worksheet.addRow(row);
+            
+            // Style the title row
+            if (index === 0) {
+                wsRow.font = { bold: true, size: 16, color: { argb: '366092' } };
+                wsRow.getCell(1).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'E7E6E6' }
+                };
+            }
+            
+            // Style section headers
+            if (row[0] === 'Status Breakdown' || row[0] === 'Shoveler Analysis') {
+                wsRow.font = { bold: true, color: { argb: '366092' } };
+            }
+            
+            // Style data rows
+            if (index > 1 && row[0] && row[1] && row[0] !== 'Status Breakdown' && row[0] !== 'Shoveler Analysis') {
+                wsRow.getCell(1).font = { bold: true };
+            }
+        });
+        
+        // Set column widths
+        worksheet.getColumn(1).width = 25;
+        worksheet.getColumn(2).width = 20;
+        
+        // Add borders
+        worksheet.eachRow((row) => {
+            row.eachCell((cell) => {
+                if (cell.value) {
+                    cell.border = {
+                        top: { style: 'thin' },
+                        left: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                }
+            });
+        });
+        
+        console.log('✅ Merchandising summary worksheet created');
+    }
+
+    async createShovelerDetailsWorksheet(results) {
+        const worksheet = this.workbook.addWorksheet('Shoveler Details');
+        
+        // Define columns for detailed shoveler data
+        worksheet.columns = [
+            { header: 'Store Code', key: 'store', width: 12 },
+            { header: 'Shoveler Title', key: 'title', width: 40 },
+            { header: 'Carousel ID', key: 'carouselId', width: 20 },
+            { header: 'ASIN Count', key: 'asinCount', width: 12 },
+            { header: 'ASINs', key: 'asins', width: 80 }
+        ];
+        
+        // Style the header row
+        const headerRow = worksheet.getRow(1);
+        headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+        headerRow.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: '366092' }
+        };
+        headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        
+        // Add data rows - flatten shoveler data
+        results.forEach(result => {
+            if (result.success && result.shovelers && result.shovelers.length > 0) {
+                result.shovelers.forEach(shoveler => {
+                    const row = worksheet.addRow({
+                        store: result.store,
+                        title: shoveler.title,
+                        carouselId: shoveler.carouselId,
+                        asinCount: shoveler.asinCount || shoveler.asins.length,
+                        asins: shoveler.asins.join(', ')
+                    });
+                    
+                    // Color code based on ASIN count
+                    const asinCountCell = row.getCell('asinCount');
+                    const count = shoveler.asinCount || shoveler.asins.length;
+                    if (count >= 10) {
+                        asinCountCell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'C6EFCE' }
+                        };
+                    } else if (count >= 5) {
+                        asinCountCell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFEB9C' }
+                        };
+                    } else if (count > 0) {
+                        asinCountCell.fill = {
+                            type: 'pattern',
+                            pattern: 'solid',
+                            fgColor: { argb: 'FFC7CE' }
+                        };
+                    }
+                });
+            }
+        });
+        
+        // Add borders to all cells
+        worksheet.eachRow((row, rowNumber) => {
+            row.eachCell((cell) => {
+                cell.border = {
+                    top: { style: 'thin' },
+                    left: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+        });
+        
+        // Freeze the header row
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+        
+        // Calculate total rows added
+        const totalShovelers = results.reduce((sum, r) => sum + (r.shovelers ? r.shovelers.length : 0), 0);
+        console.log(`✅ Shoveler details worksheet created with ${totalShovelers} shoveler entries`);
     }
 }
 

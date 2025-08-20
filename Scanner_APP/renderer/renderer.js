@@ -12,6 +12,7 @@ class WFMScannerUI {
         this.screenDimensions = null;
         this.savedConfig = null;
         this.filteredResults = [];
+        this.currentMode = 'item'; // 'item' or 'merchandising'
         
         this.initializeUI();
         this.setupEventListeners();
@@ -75,6 +76,12 @@ class WFMScannerUI {
     initializeUI() {
         // Get DOM elements with new IDs
         this.elements = {
+            // Mode selector
+            scanModeSelect: document.getElementById('scanModeSelect'),
+            itemModeDesc: document.getElementById('itemModeDesc'),
+            merchandisingModeDesc: document.getElementById('merchandisingModeDesc'),
+            itemListGroup: document.getElementById('itemListGroup'),
+            
             // File selection
             selectStoreMappingBtn: document.getElementById('selectStoreMappingBtn'),
             storeMappingFile: document.getElementById('storeMappingFile'),
@@ -87,7 +94,7 @@ class WFMScannerUI {
             pageTimeout: document.getElementById('pageTimeout'),
             maxRetries: document.getElementById('maxRetries'),
             headlessMode: document.getElementById('headlessMode'),
-            captureScreenshots: document.getElementById('captureScreenshots'), 
+            captureScreenshots: document.getElementById('captureScreenshots'),
             skipExistingResults: document.getElementById('skipExistingResults'),
             maxConcurrentAgents: document.getElementById('maxConcurrentAgents'),
             
@@ -120,12 +127,21 @@ class WFMScannerUI {
         // Set headless mode to false by default for side-by-side viewing
         this.elements.headlessMode.checked = false;
 
+        // Initialize mode toggle
+        this.updateModeUI();
+
         this.log('🚀 WFM Scanner App initialized with new responsive UI', 'info');
         this.log('📐 Configured for side-by-side window display', 'info');
+        this.log('🔧 Scanner Mode: Item Mode (default)', 'info');
         this.updateUI();
     }
 
     setupEventListeners() {
+        // Mode selector
+        this.elements.scanModeSelect.addEventListener('change', () => {
+            this.handleModeChange();
+        });
+
         // File selection
         this.elements.selectStoreMappingBtn.addEventListener('click', () => {
             this.selectStoreMappingFile();
@@ -315,10 +331,58 @@ class WFMScannerUI {
         };
     }
 
+    handleModeChange() {
+        this.currentMode = this.elements.scanModeSelect.value;
+        this.updateModeUI();
+        const modeNames = {
+            'item': 'Item Mode',
+            'merchandising': 'Merchandising Mode',
+            'competitive': 'Competitive Mode'
+        };
+        this.log(`🔧 Scanner Mode switched to: ${modeNames[this.currentMode] || this.currentMode}`, 'info');
+        this.updateUI();
+    }
+
+    updateModeUI() {
+        const isItemMode = this.currentMode === 'item';
+        const isMerchandisingMode = this.currentMode === 'merchandising';
+        const isCompetitiveMode = this.currentMode === 'competitive';
+
+        // Update description visibility with null checks
+        if (this.elements.itemModeDesc) {
+            this.elements.itemModeDesc.classList.toggle('active', isItemMode);
+        }
+        if (this.elements.merchandisingModeDesc) {
+            this.elements.merchandisingModeDesc.classList.toggle('active', isMerchandisingMode);
+        }
+        
+        // Add competitive mode description if it exists
+        const competitiveModeDesc = document.getElementById('competitiveModeDesc');
+        if (competitiveModeDesc) {
+            competitiveModeDesc.classList.toggle('active', isCompetitiveMode);
+        }
+
+        // Show/hide item list group based on mode with null check
+        if (this.elements.itemListGroup) {
+            this.elements.itemListGroup.classList.toggle('hidden', !isItemMode);
+        }
+
+        // Update selector value with null check
+        if (this.elements.scanModeSelect) {
+            this.elements.scanModeSelect.value = this.currentMode;
+        }
+    }
+
     async startScan() {
         try {
-            if (!this.storeMappingFile || !this.itemListFile) {
-                this.log('❌ Please select both store mapping and item list files', 'error');
+            // Validation based on mode
+            if (!this.storeMappingFile) {
+                this.log('❌ Please select store mapping file', 'error');
+                return;
+            }
+
+            if (this.currentMode === 'item' && !this.itemListFile) {
+                this.log('❌ Please select item list file for Item Mode', 'error');
                 return;
             }
 
@@ -329,8 +393,9 @@ class WFMScannerUI {
 
             const config = {
                 storeMappingFile: this.storeMappingFile,
-                itemListFile: this.itemListFile,
-                settings: this.getSettings()
+                itemListFile: this.currentMode === 'item' ? this.itemListFile : null,
+                settings: this.getSettings(),
+                mode: this.currentMode
             };
 
             // Log window positioning info
@@ -339,8 +404,13 @@ class WFMScannerUI {
                 this.log(`📐 Playwright window size: ${this.screenDimensions.playwrightWidth}x${this.screenDimensions.playwrightHeight}`, 'info');
             }
 
-            this.log('🚀 Starting scan with multi-agent processing...', 'info');
-            this.log(`🤖 Using ${config.settings.maxConcurrentAgents} concurrent agents for parallel processing`, 'info');
+            if (this.currentMode === 'item') {
+                this.log('🚀 Starting Item Mode scan with multi-agent processing...', 'info');
+                this.log(`🤖 Using ${config.settings.maxConcurrentAgents} concurrent agents for parallel processing`, 'info');
+            } else {
+                this.log('🚀 Starting Merchandising Mode scan...', 'info');
+                this.log('🎠 Analyzing shoveler carousels on catering pages for each store', 'info');
+            }
             
             // Add guidance for manual store selection if needed
             if (!config.settings.headlessMode) {
@@ -594,19 +664,24 @@ class WFMScannerUI {
     }
 
     updateUI() {
-        const hasFiles = this.storeMappingFile && this.itemListFile;
+        // Check required files based on mode
+        const hasRequiredFiles = this.currentMode === 'item'
+            ? (this.storeMappingFile && this.itemListFile)
+            : this.storeMappingFile;
         const hasResults = this.scanResults.length > 0;
         
-        // Enable/disable buttons based on state
-        this.elements.startScanBtn.disabled = this.isScanning || !hasFiles;
+        // Enable/disable buttons based on state and mode
+        this.elements.startScanBtn.disabled = this.isScanning || !hasRequiredFiles;
         this.elements.stopScanBtn.disabled = !this.isScanning;
         this.elements.exportResultsBtn.disabled = !hasResults || this.isScanning;
         
-        // Update button text based on state
+        // Update button text based on state and mode
         if (this.isScanning) {
-            this.elements.startScanBtn.innerHTML = '<span class="btn-icon">🔄</span>Scanning...';
+            const modeText = this.currentMode === 'item' ? 'Item Scanning...' : 'Merchandising Scanning...';
+            this.elements.startScanBtn.innerHTML = `<span class="btn-icon">🔄</span>${modeText}`;
         } else {
-            this.elements.startScanBtn.innerHTML = '<span class="btn-icon">▶️</span>Start Scan';
+            const modeText = this.currentMode === 'item' ? 'Start Item Scan' : 'Start Merchandising Scan';
+            this.elements.startScanBtn.innerHTML = `<span class="btn-icon">▶️</span>${modeText}`;
         }
     }
 

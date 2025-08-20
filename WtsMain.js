@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.011
+// @version      1.3.012
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -373,19 +373,440 @@
         return { data, emptyCount: emptyCards.length };
     }
 
-    function downloadCSV(rows) {
-        const header = ['ASIN', 'Name', 'Section'];
+    // Enhanced carousel data extraction from JSON without navigation
+    function extractShovelerCarousels() {
+        console.log('🎠 Starting shoveler carousel extraction from JSON data...');
+        
+        const carousels = document.querySelectorAll('[data-a-carousel-options]');
+        console.log(`🎠 Found ${carousels.length} carousels with data-a-carousel-options`);
+        
+        const shovelerData = [];
+        
+        for (let i = 0; i < carousels.length; i++) {
+            const carousel = carousels[i];
+            console.log(`🎠 Processing carousel ${i + 1}/${carousels.length}`);
+            
+            try {
+                const carouselData = extractCarouselData(carousel, i);
+                if (carouselData && carouselData.asins.length > 0) {
+                    shovelerData.push(carouselData);
+                }
+            } catch (error) {
+                console.error(`❌ Error processing carousel ${i + 1}:`, error);
+            }
+        }
+        
+        console.log(`✅ Extracted data from ${shovelerData.length} shovelers`);
+        return shovelerData;
+    }
+
+    // Extract data from individual carousel
+    function extractCarouselData(carousel, index) {
+        const carouselOptions = carousel.getAttribute('data-a-carousel-options');
+        if (!carouselOptions) {
+            console.log(`⚠️ Carousel ${index + 1}: No carousel options found`);
+            return null;
+        }
+        
+        console.log(`🎠 Carousel ${index + 1}: Extracting data from options`);
+        
+        // Find carousel title
+        const carouselContainer = carousel.closest('[data-cel-widget]') || carousel.closest('.a-carousel-container') || carousel.parentElement;
+        let title = 'Unknown Shoveler';
+        
+        if (carouselContainer) {
+            // Look for title in various locations
+            const titleSelectors = [
+                'h2', 'h3', 'h4',
+                '.a-size-large', '.a-size-medium',
+                '[data-testid*="title"]',
+                '.s-size-large', '.s-size-medium'
+            ];
+            
+            for (const selector of titleSelectors) {
+                const titleElement = carouselContainer.querySelector(selector);
+                if (titleElement && titleElement.textContent.trim()) {
+                    title = titleElement.textContent.trim();
+                    break;
+                }
+            }
+        }
+        
+        // Clean title
+        title = cleanCarouselTitle(title);
+        
+        // Extract ASINs using comprehensive parsing
+        const asins = extractASINsFromCarouselOptions(carouselOptions, index);
+        
+        if (asins.length === 0) {
+            console.log(`⚠️ Carousel ${index + 1}: No ASINs extracted`);
+            return null;
+        }
+        
+        console.log(`✅ Carousel ${index + 1}: "${title}" - ${asins.length} ASINs`);
+        
+        return {
+            title: title,
+            asinCount: asins.length,
+            asins: asins,
+            carouselIndex: index + 1
+        };
+    }
+
+    // Clean carousel titles
+    function cleanCarouselTitle(title) {
+        if (!title) return 'Unknown Shoveler';
+        
+        // Remove common unwanted phrases
+        const cleanPatterns = [
+            /\s*see\s+more\s*/gi,
+            /\s*shop\s+all\s*/gi,
+            /\s*view\s+all\s*/gi,
+            /\s*browse\s+all\s*/gi,
+            /\s*explore\s+more\s*/gi,
+            /\s*discover\s+more\s*/gi,
+            /\s*learn\s+more\s*/gi,
+            /\s*show\s+more\s*/gi,
+            /\s*more\s+items?\s*/gi,
+            /\s*additional\s+items?\s*/gi
+        ];
+        
+        let cleaned = title;
+        cleanPatterns.forEach(pattern => {
+            cleaned = cleaned.replace(pattern, '');
+        });
+        
+        return cleaned.trim() || 'Unknown Shoveler';
+    }
+
+    // Comprehensive ASIN extraction from carousel options
+    function extractASINsFromCarouselOptions(carouselOptions, carouselIndex) {
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Starting comprehensive ASIN extraction`);
+        
+        let parsedOptions = null;
+        try {
+            parsedOptions = JSON.parse(carouselOptions);
+            console.log(`✅ Carousel ${carouselIndex + 1}: Successfully parsed JSON options`);
+        } catch (error) {
+            console.error(`❌ Carousel ${carouselIndex + 1}: Failed to parse JSON:`, error);
+            return [];
+        }
+        
+        const allAsins = new Set();
+        
+        // Method 1: Direct id_list in root
+        if (parsedOptions.id_list && Array.isArray(parsedOptions.id_list)) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 1 - Found id_list in root (${parsedOptions.id_list.length} items)`);
+            parsedOptions.id_list.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) allAsins.add(asin);
+            });
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 1 extracted ${allAsins.size} ASINs`);
+        }
+        
+        // Method 2: Ajax parameters
+        if (parsedOptions.ajax && parsedOptions.ajax.params) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2 - Checking ajax parameters`);
+            const params = parsedOptions.ajax.params;
+            
+            if (params.id_list && Array.isArray(params.id_list)) {
+                console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2a - Found ajax.params.id_list (${params.id_list.length} items)`);
+                params.id_list.forEach(item => {
+                    const asin = extractASINFromItem(item);
+                    if (asin) allAsins.add(asin);
+                });
+            }
+            
+            if (params.asins && Array.isArray(params.asins)) {
+                console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2b - Found ajax.params.asins (${params.asins.length} items)`);
+                params.asins.forEach(item => {
+                    const asin = extractASINFromItem(item);
+                    if (asin) allAsins.add(asin);
+                });
+            }
+            
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 2 total ASINs: ${allAsins.size}`);
+        }
+        
+        // Method 3: Exhaustive array search
+        console.log(`🎯 Carousel ${carouselIndex + 1}: Method 3 - Exhaustive array search`);
+        const arrays = findAllArraysInObject(parsedOptions, 15);
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Found ${arrays.length} arrays in JSON structure`);
+        
+        let bestArray = null;
+        let bestScore = 0;
+        
+        arrays.forEach((arr, index) => {
+            if (!Array.isArray(arr) || arr.length === 0) return;
+            
+            let asinCount = 0;
+            const tempAsins = new Set();
+            
+            arr.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) {
+                    tempAsins.add(asin);
+                    asinCount++;
+                }
+            });
+            
+            const score = asinCount;
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Array ${index + 1} - ${arr.length} items, ${asinCount} ASINs, score: ${score}`);
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestArray = arr;
+                console.log(`🏆 Carousel ${carouselIndex + 1}: New best array found with score ${score}`);
+            }
+        });
+        
+        if (bestArray) {
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 - Processing best array with ${bestArray.length} items`);
+            bestArray.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) allAsins.add(asin);
+            });
+        }
+        
+        console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 total ASINs: ${allAsins.size}`);
+        
+        // Method 4: Regex extraction from JSON string
+        console.log(`🎯 Carousel ${carouselIndex + 1}: Method 4 - Regex extraction from JSON string`);
+        const jsonString = JSON.stringify(parsedOptions);
+        
+        // Primary ASIN pattern (10 characters)
+        const primaryPattern = /\b[A-Z0-9]{10}\b/g;
+        const primaryMatches = [...jsonString.matchAll(primaryPattern)];
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Primary pattern found ${primaryMatches.length} potential ASINs`);
+        
+        primaryMatches.forEach(match => {
+            const asin = match[0];
+            if (isValidASIN(asin)) {
+                allAsins.add(asin);
+            }
+        });
+        
+        // Fallback pattern (8-15 characters) if primary didn't find enough
+        if (allAsins.size < 5) {
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Using fallback pattern (8-15 chars)`);
+            const fallbackPattern = /\b[A-Z0-9]{8,15}\b/g;
+            const fallbackMatches = [...jsonString.matchAll(fallbackPattern)];
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Fallback pattern found ${fallbackMatches.length} potential ASINs`);
+            
+            fallbackMatches.forEach(match => {
+                const asin = match[0];
+                if (isValidASIN(asin)) {
+                    allAsins.add(asin);
+                }
+            });
+        }
+        
+        console.log(`✅ Carousel ${carouselIndex + 1}: Method 4 total ASINs: ${allAsins.size}`);
+        
+        // Method 5: Raw string extraction as last resort
+        if (allAsins.size === 0) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 5 - Raw string extraction (last resort)`);
+            const rawPattern = /\b[A-Z0-9]{10}\b/g;
+            const rawMatches = [...carouselOptions.matchAll(rawPattern)];
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Raw string found ${rawMatches.length} potential ASINs`);
+            
+            rawMatches.forEach(match => {
+                const asin = match[0];
+                if (isValidASIN(asin)) {
+                    allAsins.add(asin);
+                }
+            });
+            
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 5 total ASINs: ${allAsins.size}`);
+        }
+        
+        const finalAsins = Array.from(allAsins);
+        console.log(`🎉 Carousel ${carouselIndex + 1}: Final extraction complete - ${finalAsins.length} unique ASINs`);
+        
+        if (finalAsins.length > 0) {
+            console.log(`📋 Carousel ${carouselIndex + 1}: Sample ASINs:`, finalAsins.slice(0, 5));
+        }
+        
+        return finalAsins;
+    }
+
+    // Helper function to find all arrays in an object
+    function findAllArraysInObject(obj, maxDepth = 10, currentDepth = 0, visited = new Set()) {
+        if (currentDepth >= maxDepth || !obj || typeof obj !== 'object') {
+            return [];
+        }
+        
+        // Prevent infinite loops with circular references
+        if (visited.has(obj)) {
+            return [];
+        }
+        visited.add(obj);
+        
+        const arrays = [];
+        
+        try {
+            if (Array.isArray(obj)) {
+                arrays.push(obj);
+            }
+            
+            for (const key in obj) {
+                if (obj.hasOwnProperty && obj.hasOwnProperty(key)) {
+                    const value = obj[key];
+                    if (Array.isArray(value)) {
+                        arrays.push(value);
+                    } else if (value && typeof value === 'object') {
+                        const nestedArrays = findAllArraysInObject(value, maxDepth, currentDepth + 1, visited);
+                        arrays.push(...nestedArrays);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error traversing object:', error);
+        }
+        
+        visited.delete(obj);
+        return arrays;
+    }
+
+    // Helper function to extract ASIN from various item formats
+    function extractASINFromItem(item) {
+        if (!item) return null;
+        
+        // If item is already a string and looks like an ASIN
+        if (typeof item === 'string') {
+            return isValidASIN(item) ? item : null;
+        }
+        
+        // If item is an object, look for ASIN in various properties
+        if (typeof item === 'object') {
+            const asinProperties = ['asin', 'ASIN', 'id', 'ID', 'itemId', 'productId'];
+            
+            for (const prop of asinProperties) {
+                if (item[prop] && typeof item[prop] === 'string') {
+                    const asin = item[prop];
+                    if (isValidASIN(asin)) {
+                        return asin;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    // Helper function to validate ASIN format
+    function isValidASIN(asin) {
+        if (!asin || typeof asin !== 'string') return false;
+        
+        // Standard ASIN: 10 alphanumeric characters
+        if (/^[A-Z0-9]{10}$/i.test(asin)) return true;
+        
+        // Extended validation: 8-15 alphanumeric characters (for flexibility)
+        if (/^[A-Z0-9]{8,15}$/i.test(asin)) return true;
+        
+        return false;
+    }
+
+    // Enhanced data extraction that combines visible cards and carousel data
+    function extractAllData() {
+        console.log('🚀 Starting comprehensive data extraction...');
+        
+        // Extract visible cards (existing functionality)
+        const cardData = extractDataFromCards();
+        console.log(`📦 Visible cards: ${cardData.data.length} ASINs, ${cardData.emptyCount} empty cards`);
+        
+        // Extract carousel/shoveler data (new functionality)
+        const shovelerData = extractShovelerCarousels();
+        console.log(`🎠 Shoveler data: ${shovelerData.length} carousels`);
+        
+        // Combine data
+        const combinedData = {
+            visibleCards: cardData.data,
+            emptyCards: cardData.emptyCount,
+            shovelers: shovelerData,
+            totalVisibleASINs: cardData.data.length,
+            totalShovelerASINs: shovelerData.reduce((sum, shoveler) => sum + shoveler.asinCount, 0),
+            totalShovelers: shovelerData.length
+        };
+        
+        console.log('✅ Comprehensive data extraction complete:', {
+            visibleASINs: combinedData.totalVisibleASINs,
+            shovelerASINs: combinedData.totalShovelerASINs,
+            totalShovelers: combinedData.totalShovelers
+        });
+        
+        return combinedData;
+    }
+
+    // Enhanced CSV download function that handles both visible cards and shoveler data
+    function downloadCSV(combinedData) {
+        console.log('📦 Starting CSV export with comprehensive data...');
+        
+        // If legacy format (array of rows), convert to new format
+        if (Array.isArray(combinedData) && combinedData.length > 0 && combinedData[0].ASIN) {
+            console.log('📦 Converting legacy format to new format');
+            combinedData = {
+                visibleCards: combinedData,
+                emptyCards: 0,
+                shovelers: [],
+                totalVisibleASINs: combinedData.length,
+                totalShovelerASINs: 0,
+                totalShovelers: 0
+            };
+        }
+        
+        const csvRows = [];
+        
+        // Add visible cards data
+        if (combinedData.visibleCards && combinedData.visibleCards.length > 0) {
+            console.log(`📦 Adding ${combinedData.visibleCards.length} visible cards to CSV`);
+            combinedData.visibleCards.forEach(card => {
+                csvRows.push({
+                    ASIN: card.ASIN || '',
+                    Name: card.Name || '',
+                    Section: card.Section || '',
+                    Type: 'Visible Card',
+                    ShovelerTitle: '',
+                    ShovelerIndex: ''
+                });
+            });
+        }
+        
+        // Add shoveler data
+        if (combinedData.shovelers && combinedData.shovelers.length > 0) {
+            console.log(`📦 Adding ${combinedData.shovelers.length} shovelers to CSV`);
+            combinedData.shovelers.forEach(shoveler => {
+                if (shoveler.asins && shoveler.asins.length > 0) {
+                    shoveler.asins.forEach(asin => {
+                        csvRows.push({
+                            ASIN: asin,
+                            Name: `[From Shoveler: ${shoveler.title}]`,
+                            Section: 'Shoveler Carousel',
+                            Type: 'Shoveler ASIN',
+                            ShovelerTitle: shoveler.title,
+                            ShovelerIndex: shoveler.carouselIndex.toString()
+                        });
+                    });
+                }
+            });
+        }
+        
+        // Create CSV content with enhanced headers
+        const header = ['ASIN', 'Name', 'Section', 'Type', 'ShovelerTitle', 'ShovelerIndex'];
         const csvContent = [header.join(',')].concat(
-            rows.map(row => header.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(','))
+            csvRows.map(row => header.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(','))
         ).join('\n');
 
         const blob = new Blob([csvContent], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'wholefoods_items.csv';
+        a.download = 'wholefoods_comprehensive_data.csv';
         a.click();
         URL.revokeObjectURL(url);
+        
+        console.log(`✅ CSV export complete: ${csvRows.length} total rows`);
+        console.log(`📊 Export summary: ${combinedData.totalVisibleASINs} visible ASINs, ${combinedData.totalShovelerASINs} shoveler ASINs from ${combinedData.totalShovelers} shovelers`);
     }
 
     function createExportButton() {
@@ -1302,17 +1723,29 @@
         exportBtn.style.cursor = 'pointer';
 
         exportBtn.addEventListener('click', () => {
-            if (lastExtractedData.length === 0) {
-                const { data, emptyCount } = extractDataFromCards();
-                lastExtractedData = data;
-                alert(`${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
-
-                if (data.length === 0) {
-                    alert('No ASIN cards found. Try scrolling or navigating through carousels.');
-                    return;
-                }
+            console.log('📦 Export button clicked - using comprehensive data extraction');
+            
+            // Use comprehensive data extraction
+            const comprehensiveData = extractAllData();
+            
+            // Show summary of what was found
+            const summary = `📊 Data Extraction Complete!\n\n` +
+                `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
+                `Empty Cards: ${comprehensiveData.emptyCards}\n` +
+                `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
+                `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
+                `Total ASINs: ${comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs}`;
+            
+            alert(summary);
+            
+            if (comprehensiveData.totalVisibleASINs === 0 && comprehensiveData.totalShovelerASINs === 0) {
+                alert('No ASIN data found. Try scrolling or navigating through carousels.');
+                return;
             }
-            downloadCSV(lastExtractedData);
+            
+            // Store for future use and export
+            lastExtractedData = comprehensiveData;
+            downloadCSV(comprehensiveData);
         });
 
         const refreshBtn = document.createElement('button');
@@ -1325,10 +1758,26 @@
         refreshBtn.style.cursor = 'pointer';
 
         const refreshData = () => {
+            console.log('🔄 Refresh button clicked - using comprehensive data extraction');
+            
+            // Clear previous data
             lastExtractedData = [];
-            const { data, emptyCount } = extractDataFromCards();
-            lastExtractedData = data;
-            alert(`🔄 Refreshed: ${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
+            
+            // Use comprehensive data extraction
+            const comprehensiveData = extractAllData();
+            
+            // Show summary of what was found
+            const summary = `🔄 Data Refresh Complete!\n\n` +
+                `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
+                `Empty Cards: ${comprehensiveData.emptyCards}\n` +
+                `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
+                `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
+                `Total ASINs: ${comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs}`;
+            
+            alert(summary);
+            
+            // Store for future use
+            lastExtractedData = comprehensiveData;
         };
 
         refreshBtn.addEventListener('click', refreshData);
@@ -2392,8 +2841,10 @@
                 cardCounterInterval = setInterval(() => {
                     try {
                         if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
-                            const { data, emptyCount } = extractDataFromCards();
-                            counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
+                            // Use comprehensive data extraction for counter
+                            const comprehensiveData = extractAllData();
+                            const totalASINs = comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs;
+                            counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${totalASINs} | Empty: ${comprehensiveData.emptyCards}`;
                         } else {
                             console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                             if (cardCounterInterval) {
