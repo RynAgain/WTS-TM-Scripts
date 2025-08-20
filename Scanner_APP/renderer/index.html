@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WFM Scanner App</title>
     <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Amazon+Ember:wght@300;400;500;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
@@ -41,7 +40,29 @@
             <!-- Left Sidebar - Configuration -->
             <aside class="sidebar">
                 <div class="sidebar-section">
-                    <h3>📁 File Configuration</h3>
+                    <h3>🔧 Scanner Mode</h3>
+                    <div class="mode-selector-container">
+                        <select id="scanModeSelect" class="mode-selector">
+                            <option value="item">📦 Item Mode</option>
+                            <option value="merchandising">🎠 Merchandising Mode</option>
+                            <option value="competitive" disabled>🏆 Competitive Mode (Coming Soon)</option>
+                        </select>
+                        <div class="mode-description">
+                            <div id="itemModeDesc" class="mode-desc active">
+                                <strong>Item Mode:</strong> Scans individual product pages using ASIN list to collect detailed product data (price, nutrition, ingredients, variations, etc.)
+                            </div>
+                            <div id="merchandisingModeDesc" class="mode-desc">
+                                <strong>Merchandising Mode:</strong> Analyzes catering page shoveler carousels to extract ASINs and their associated promotional sections for each store
+                            </div>
+                            <div id="competitiveModeDesc" class="mode-desc">
+                                <strong>Competitive Mode:</strong> Compare pricing and availability across different stores for competitive analysis and market research
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>� File Configuration</h3>
                     <div class="file-input-group">
                         <label>Store Mapping</label>
                         <button id="selectStoreMappingBtn" class="file-btn">
@@ -49,12 +70,13 @@
                         </button>
                         <span id="storeMappingFile" class="file-status">No file selected</span>
                     </div>
-                    <div class="file-input-group">
+                    <div class="file-input-group item-list-group" id="itemListGroup">
                         <label>Item List</label>
                         <button id="selectItemListBtn" class="file-btn">
                             📊 Select Excel/CSV File
                         </button>
                         <span id="itemListFile" class="file-status">No file selected</span>
+                        <div class="form-help">Required for Item Mode only. Not needed for Merchandising Mode.</div>
                     </div>
                 </div>
 

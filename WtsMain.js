@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.011
+// @version      1.3.012
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -118,9 +118,15 @@
     // FIXED: Add interval tracking for proper cleanup
     let cardCounterInterval = null;
     let urlPollingInterval = null;
+    let versionCheckInterval = null;
 
     // FIXED: Add initialization guard to prevent overlapping runs
     let _initializing = false;
+
+    // Version checking variables
+    const CURRENT_VERSION = '1.3.012';
+    const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js';
+    const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
@@ -335,6 +341,12 @@
             urlPollingInterval = null;
         }
 
+        if (versionCheckInterval) {
+            console.log('🧹 Clearing version check interval:', versionCheckInterval);
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
+        }
+
         isInitialized = false;
         wtsPanel = null;
     }
@@ -353,8 +365,225 @@
         return null;
     }
 
+    // Version checking functionality
+    async function checkForUpdates(showNoUpdateMessage = false) {
+        try {
+            console.log('🔍 Checking for script updates...');
+            
+            const lastCheck = GM_getValue('lastVersionCheck', 0);
+            const now = Date.now();
+            
+            // Don't check too frequently unless explicitly requested
+            if (!showNoUpdateMessage && (now - lastCheck) < VERSION_CHECK_INTERVAL) {
+                console.log('⏭️ Version check skipped - checked recently');
+                return;
+            }
+            
+            // Fetch the latest version from GitHub
+            const response = await fetch(GITHUB_VERSION_URL, {
+                method: 'GET',
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const scriptContent = await response.text();
+            
+            // Extract version from the script content
+            const versionMatch = scriptContent.match(/@version\s+([^\s]+)/);
+            if (!versionMatch) {
+                throw new Error('Could not extract version from GitHub script');
+            }
+            
+            const latestVersion = versionMatch[1].trim();
+            console.log(`📋 Current version: ${CURRENT_VERSION}`);
+            console.log(`📋 Latest version: ${latestVersion}`);
+            
+            // Update last check timestamp
+            GM_setValue('lastVersionCheck', now);
+            
+            // Compare versions
+            if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
+                console.log('🆕 New version available!');
+                showUpdateNotification(latestVersion);
+            } else {
+                console.log('✅ Script is up to date');
+                if (showNoUpdateMessage) {
+                    alert(`✅ You're running the latest version!\n\nCurrent: ${CURRENT_VERSION}\nLatest: ${latestVersion}`);
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Error checking for updates:', error);
+            if (showNoUpdateMessage) {
+                alert(`❌ Failed to check for updates: ${error.message}\n\nPlease check your internet connection or try again later.`);
+            }
+        }
+    }
+    
+    function isNewerVersion(latest, current) {
+        // Simple version comparison - assumes format like "1.3.012"
+        const latestParts = latest.split('.').map(part => parseInt(part, 10));
+        const currentParts = current.split('.').map(part => parseInt(part, 10));
+        
+        // Pad arrays to same length
+        const maxLength = Math.max(latestParts.length, currentParts.length);
+        while (latestParts.length < maxLength) latestParts.push(0);
+        while (currentParts.length < maxLength) currentParts.push(0);
+        
+        // Compare each part
+        for (let i = 0; i < maxLength; i++) {
+            if (latestParts[i] > currentParts[i]) {
+                return true;
+            } else if (latestParts[i] < currentParts[i]) {
+                return false;
+            }
+        }
+        
+        return false; // Versions are equal
+    }
+    
+    function showUpdateNotification(latestVersion) {
+        const updateModal = document.createElement('div');
+        updateModal.style.position = 'fixed';
+        updateModal.style.top = '0';
+        updateModal.style.left = '0';
+        updateModal.style.width = '100%';
+        updateModal.style.height = '100%';
+        updateModal.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        updateModal.style.zIndex = '2147483647';
+        updateModal.style.display = 'flex';
+        updateModal.style.alignItems = 'center';
+        updateModal.style.justifyContent = 'center';
+        updateModal.style.fontFamily = 'sans-serif';
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.backgroundColor = '#fff';
+        modalContent.style.padding = '30px';
+        modalContent.style.borderRadius = '12px';
+        modalContent.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
+        modalContent.style.maxWidth = '500px';
+        modalContent.style.width = '90%';
+        modalContent.style.textAlign = 'center';
+        modalContent.style.border = '3px solid #28a745';
+        
+        modalContent.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">🆕</div>
+            <h2 style="margin: 0 0 15px 0; color: #28a745; font-size: 24px;">Update Available!</h2>
+            <p style="margin: 0 0 20px 0; font-size: 16px; color: #333; line-height: 1.5;">
+                A new version of WTS Tools is available on GitHub.
+            </p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                    <strong>Current Version:</strong> ${CURRENT_VERSION}
+                </div>
+                <div style="font-size: 14px; color: #28a745;">
+                    <strong>Latest Version:</strong> ${latestVersion}
+                </div>
+            </div>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="updateNowBtn" style="
+                    padding: 12px 24px;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    font-weight: bold;
+                    transition: background-color 0.2s;
+                ">Update Now</button>
+                <button id="remindLaterBtn" style="
+                    padding: 12px 24px;
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">Remind Later</button>
+                <button id="skipVersionBtn" style="
+                    padding: 12px 24px;
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">Skip This Version</button>
+            </div>
+            <p style="margin: 20px 0 0 0; font-size: 12px; color: #666;">
+                Updates include bug fixes, new features, and improvements.
+            </p>
+        `;
+        
+        updateModal.appendChild(modalContent);
+        document.body.appendChild(updateModal);
+        
+        // Add hover effects
+        const updateBtn = document.getElementById('updateNowBtn');
+        const remindBtn = document.getElementById('remindLaterBtn');
+        const skipBtn = document.getElementById('skipVersionBtn');
+        
+        updateBtn.addEventListener('mouseenter', () => {
+            updateBtn.style.backgroundColor = '#218838';
+        });
+        updateBtn.addEventListener('mouseleave', () => {
+            updateBtn.style.backgroundColor = '#28a745';
+        });
+        
+        // Event handlers
+        updateBtn.addEventListener('click', () => {
+            window.open('https://github.com/RynAgain/WTS-TM-Scripts', '_blank');
+            document.body.removeChild(updateModal);
+        });
+        
+        remindBtn.addEventListener('click', () => {
+            // Reset last check time to allow checking again sooner
+            GM_setValue('lastVersionCheck', 0);
+            document.body.removeChild(updateModal);
+        });
+        
+        skipBtn.addEventListener('click', () => {
+            // Mark this version as skipped
+            GM_setValue('skippedVersion', latestVersion);
+            document.body.removeChild(updateModal);
+        });
+        
+        // Close on background click
+        updateModal.addEventListener('click', (e) => {
+            if (e.target === updateModal) {
+                document.body.removeChild(updateModal);
+            }
+        });
+    }
+    
+    function startVersionChecking() {
+        console.log('🔍 Starting automatic version checking...');
+        
+        // Check immediately on startup (but don't show "no update" message)
+        setTimeout(() => {
+            checkForUpdates(false);
+        }, 5000); // Wait 5 seconds after startup
+        
+        // Set up periodic checking
+        versionCheckInterval = setInterval(() => {
+            checkForUpdates(false);
+        }, VERSION_CHECK_INTERVAL);
+        
+        console.log('✅ Version checking initialized');
+    }
+
     // Start network interception immediately
     startNetworkInterception();
+    
+    // Start version checking
+    startVersionChecking();
 
     function extractDataFromCards() {
         const cards = document.querySelectorAll('[data-csa-c-type="item"][data-csa-c-item-type="asin"]');
@@ -373,19 +602,458 @@
         return { data, emptyCount: emptyCards.length };
     }
 
-    function downloadCSV(rows) {
-        const header = ['ASIN', 'Name', 'Section'];
-        const csvContent = [header.join(',')].concat(
-            rows.map(row => header.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(','))
-        ).join('\n');
+    // Enhanced carousel data extraction from JSON without navigation
+    function extractShovelerCarousels() {
+        console.log('🎠 Starting shoveler carousel extraction from JSON data...');
+        
+        const carousels = document.querySelectorAll('[data-a-carousel-options]');
+        console.log(`🎠 Found ${carousels.length} carousels with data-a-carousel-options`);
+        
+        const shovelerData = [];
+        
+        for (let i = 0; i < carousels.length; i++) {
+            const carousel = carousels[i];
+            console.log(`🎠 Processing carousel ${i + 1}/${carousels.length}`);
+            
+            try {
+                const carouselData = extractCarouselData(carousel, i);
+                if (carouselData && carouselData.asins.length > 0) {
+                    shovelerData.push(carouselData);
+                }
+            } catch (error) {
+                console.error(`❌ Error processing carousel ${i + 1}:`, error);
+            }
+        }
+        
+        console.log(`✅ Extracted data from ${shovelerData.length} shovelers`);
+        return shovelerData;
+    }
 
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+    // Extract data from individual carousel
+    function extractCarouselData(carousel, index) {
+        const carouselOptions = carousel.getAttribute('data-a-carousel-options');
+        if (!carouselOptions) {
+            console.log(`⚠️ Carousel ${index + 1}: No carousel options found`);
+            return null;
+        }
+        
+        console.log(`🎠 Carousel ${index + 1}: Extracting data from options`);
+        
+        // Find carousel title
+        const carouselContainer = carousel.closest('[data-cel-widget]') || carousel.closest('.a-carousel-container') || carousel.parentElement;
+        let title = 'Unknown Shoveler';
+        
+        if (carouselContainer) {
+            // Look for title in various locations
+            const titleSelectors = [
+                'h2', 'h3', 'h4',
+                '.a-size-large', '.a-size-medium',
+                '[data-testid*="title"]',
+                '.s-size-large', '.s-size-medium'
+            ];
+            
+            for (const selector of titleSelectors) {
+                const titleElement = carouselContainer.querySelector(selector);
+                if (titleElement && titleElement.textContent.trim()) {
+                    title = titleElement.textContent.trim();
+                    break;
+                }
+            }
+        }
+        
+        // Clean title
+        title = cleanCarouselTitle(title);
+        
+        // Extract ASINs using comprehensive parsing
+        const asins = extractASINsFromCarouselOptions(carouselOptions, index);
+        
+        if (asins.length === 0) {
+            console.log(`⚠️ Carousel ${index + 1}: No ASINs extracted`);
+            return null;
+        }
+        
+        console.log(`✅ Carousel ${index + 1}: "${title}" - ${asins.length} ASINs`);
+        
+        return {
+            title: title,
+            asinCount: asins.length,
+            asins: asins,
+            carouselIndex: index + 1
+        };
+    }
+
+    // Clean carousel titles
+    function cleanCarouselTitle(title) {
+        if (!title) return 'Unknown Shoveler';
+        
+        // Remove common unwanted phrases
+        const cleanPatterns = [
+            /\s*see\s+more\s*/gi,
+            /\s*shop\s+all\s*/gi,
+            /\s*view\s+all\s*/gi,
+            /\s*browse\s+all\s*/gi,
+            /\s*explore\s+more\s*/gi,
+            /\s*discover\s+more\s*/gi,
+            /\s*learn\s+more\s*/gi,
+            /\s*show\s+more\s*/gi,
+            /\s*more\s+items?\s*/gi,
+            /\s*additional\s+items?\s*/gi
+        ];
+        
+        let cleaned = title;
+        cleanPatterns.forEach(pattern => {
+            cleaned = cleaned.replace(pattern, '');
+        });
+        
+        return cleaned.trim() || 'Unknown Shoveler';
+    }
+
+    // Comprehensive ASIN extraction from carousel options
+    function extractASINsFromCarouselOptions(carouselOptions, carouselIndex) {
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Starting comprehensive ASIN extraction`);
+        
+        let parsedOptions = null;
+        try {
+            parsedOptions = JSON.parse(carouselOptions);
+            console.log(`✅ Carousel ${carouselIndex + 1}: Successfully parsed JSON options`);
+        } catch (error) {
+            console.error(`❌ Carousel ${carouselIndex + 1}: Failed to parse JSON:`, error);
+            return [];
+        }
+        
+        const allAsins = new Set();
+        
+        // Method 1: Direct id_list in root
+        if (parsedOptions.id_list && Array.isArray(parsedOptions.id_list)) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 1 - Found id_list in root (${parsedOptions.id_list.length} items)`);
+            parsedOptions.id_list.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) allAsins.add(asin);
+            });
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 1 extracted ${allAsins.size} ASINs`);
+        }
+        
+        // Method 2: Ajax parameters
+        if (parsedOptions.ajax && parsedOptions.ajax.params) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2 - Checking ajax parameters`);
+            const params = parsedOptions.ajax.params;
+            
+            if (params.id_list && Array.isArray(params.id_list)) {
+                console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2a - Found ajax.params.id_list (${params.id_list.length} items)`);
+                params.id_list.forEach(item => {
+                    const asin = extractASINFromItem(item);
+                    if (asin) allAsins.add(asin);
+                });
+            }
+            
+            if (params.asins && Array.isArray(params.asins)) {
+                console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2b - Found ajax.params.asins (${params.asins.length} items)`);
+                params.asins.forEach(item => {
+                    const asin = extractASINFromItem(item);
+                    if (asin) allAsins.add(asin);
+                });
+            }
+            
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 2 total ASINs: ${allAsins.size}`);
+        }
+        
+        // Method 3: Exhaustive array search
+        console.log(`🎯 Carousel ${carouselIndex + 1}: Method 3 - Exhaustive array search`);
+        const arrays = findAllArraysInObject(parsedOptions, 15);
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Found ${arrays.length} arrays in JSON structure`);
+        
+        let bestArray = null;
+        let bestScore = 0;
+        
+        arrays.forEach((arr, index) => {
+            if (!Array.isArray(arr) || arr.length === 0) return;
+            
+            let asinCount = 0;
+            const tempAsins = new Set();
+            
+            arr.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) {
+                    tempAsins.add(asin);
+                    asinCount++;
+                }
+            });
+            
+            const score = asinCount;
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Array ${index + 1} - ${arr.length} items, ${asinCount} ASINs, score: ${score}`);
+            
+            if (score > bestScore) {
+                bestScore = score;
+                bestArray = arr;
+                console.log(`🏆 Carousel ${carouselIndex + 1}: New best array found with score ${score}`);
+            }
+        });
+        
+        if (bestArray) {
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 - Processing best array with ${bestArray.length} items`);
+            bestArray.forEach(item => {
+                const asin = extractASINFromItem(item);
+                if (asin) allAsins.add(asin);
+            });
+        }
+        
+        console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 total ASINs: ${allAsins.size}`);
+        
+        // Method 4: Regex extraction from JSON string
+        console.log(`🎯 Carousel ${carouselIndex + 1}: Method 4 - Regex extraction from JSON string`);
+        const jsonString = JSON.stringify(parsedOptions);
+        
+        // Primary ASIN pattern (10 characters)
+        const primaryPattern = /\b[A-Z0-9]{10}\b/g;
+        const primaryMatches = [...jsonString.matchAll(primaryPattern)];
+        console.log(`🔍 Carousel ${carouselIndex + 1}: Primary pattern found ${primaryMatches.length} potential ASINs`);
+        
+        primaryMatches.forEach(match => {
+            const asin = match[0];
+            if (isValidASIN(asin)) {
+                allAsins.add(asin);
+            }
+        });
+        
+        // Fallback pattern (8-15 characters) if primary didn't find enough
+        if (allAsins.size < 5) {
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Using fallback pattern (8-15 chars)`);
+            const fallbackPattern = /\b[A-Z0-9]{8,15}\b/g;
+            const fallbackMatches = [...jsonString.matchAll(fallbackPattern)];
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Fallback pattern found ${fallbackMatches.length} potential ASINs`);
+            
+            fallbackMatches.forEach(match => {
+                const asin = match[0];
+                if (isValidASIN(asin)) {
+                    allAsins.add(asin);
+                }
+            });
+        }
+        
+        console.log(`✅ Carousel ${carouselIndex + 1}: Method 4 total ASINs: ${allAsins.size}`);
+        
+        // Method 5: Raw string extraction as last resort
+        if (allAsins.size === 0) {
+            console.log(`🎯 Carousel ${carouselIndex + 1}: Method 5 - Raw string extraction (last resort)`);
+            const rawPattern = /\b[A-Z0-9]{10}\b/g;
+            const rawMatches = [...carouselOptions.matchAll(rawPattern)];
+            console.log(`🔍 Carousel ${carouselIndex + 1}: Raw string found ${rawMatches.length} potential ASINs`);
+            
+            rawMatches.forEach(match => {
+                const asin = match[0];
+                if (isValidASIN(asin)) {
+                    allAsins.add(asin);
+                }
+            });
+            
+            console.log(`✅ Carousel ${carouselIndex + 1}: Method 5 total ASINs: ${allAsins.size}`);
+        }
+        
+        const finalAsins = Array.from(allAsins);
+        console.log(`🎉 Carousel ${carouselIndex + 1}: Final extraction complete - ${finalAsins.length} unique ASINs`);
+        
+        if (finalAsins.length > 0) {
+            console.log(`📋 Carousel ${carouselIndex + 1}: Sample ASINs:`, finalAsins.slice(0, 5));
+        }
+        
+        return finalAsins;
+    }
+
+    // Helper function to find all arrays in an object
+    function findAllArraysInObject(obj, maxDepth = 10, currentDepth = 0, visited = new Set()) {
+        if (currentDepth >= maxDepth || !obj || typeof obj !== 'object') {
+            return [];
+        }
+        
+        // Prevent infinite loops with circular references
+        if (visited.has(obj)) {
+            return [];
+        }
+        visited.add(obj);
+        
+        const arrays = [];
+        
+        try {
+            if (Array.isArray(obj)) {
+                arrays.push(obj);
+            }
+            
+            for (const key in obj) {
+                if (obj.hasOwnProperty && obj.hasOwnProperty(key)) {
+                    const value = obj[key];
+                    if (Array.isArray(value)) {
+                        arrays.push(value);
+                    } else if (value && typeof value === 'object') {
+                        const nestedArrays = findAllArraysInObject(value, maxDepth, currentDepth + 1, visited);
+                        arrays.push(...nestedArrays);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error traversing object:', error);
+        }
+        
+        visited.delete(obj);
+        return arrays;
+    }
+
+    // Helper function to extract ASIN from various item formats
+    function extractASINFromItem(item) {
+        if (!item) return null;
+        
+        // If item is already a string and looks like an ASIN
+        if (typeof item === 'string') {
+            return isValidASIN(item) ? item : null;
+        }
+        
+        // If item is an object, look for ASIN in various properties
+        if (typeof item === 'object') {
+            const asinProperties = ['asin', 'ASIN', 'id', 'ID', 'itemId', 'productId'];
+            
+            for (const prop of asinProperties) {
+                if (item[prop] && typeof item[prop] === 'string') {
+                    const asin = item[prop];
+                    if (isValidASIN(asin)) {
+                        return asin;
+                    }
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    // Helper function to validate ASIN format
+    function isValidASIN(asin) {
+        if (!asin || typeof asin !== 'string') return false;
+        
+        // Standard ASIN: 10 alphanumeric characters
+        if (/^[A-Z0-9]{10}$/i.test(asin)) return true;
+        
+        // Extended validation: 8-15 alphanumeric characters (for flexibility)
+        if (/^[A-Z0-9]{8,15}$/i.test(asin)) return true;
+        
+        return false;
+    }
+
+    // Enhanced data extraction that combines visible cards and carousel data
+    function extractAllData() {
+        console.log('🚀 Starting comprehensive data extraction...');
+        
+        // Extract visible cards (existing functionality)
+        const cardData = extractDataFromCards();
+        console.log(`📦 Visible cards: ${cardData.data.length} ASINs, ${cardData.emptyCount} empty cards`);
+        
+        // Extract carousel/shoveler data (new functionality)
+        const shovelerData = extractShovelerCarousels();
+        console.log(`🎠 Shoveler data: ${shovelerData.length} carousels`);
+        
+        // Combine data
+        const combinedData = {
+            visibleCards: cardData.data,
+            emptyCards: cardData.emptyCount,
+            shovelers: shovelerData,
+            totalVisibleASINs: cardData.data.length,
+            totalShovelerASINs: shovelerData.reduce((sum, shoveler) => sum + shoveler.asinCount, 0),
+            totalShovelers: shovelerData.length
+        };
+        
+        console.log('✅ Comprehensive data extraction complete:', {
+            visibleASINs: combinedData.totalVisibleASINs,
+            shovelerASINs: combinedData.totalShovelerASINs,
+            totalShovelers: combinedData.totalShovelers,
+            totalASINsExcludingShovelers: combinedData.totalVisibleASINs // Only count visible cards in total
+        });
+        
+        return combinedData;
+    }
+
+    // Enhanced XLSX download function that creates separate sheets for visible cards and shoveler data
+    function downloadXLSX(combinedData) {
+        console.log('📦 Starting XLSX export with separate sheets...');
+        
+        // If legacy format (array of rows), convert to new format
+        if (Array.isArray(combinedData) && combinedData.length > 0 && combinedData[0].ASIN) {
+            console.log('📦 Converting legacy format to new format');
+            combinedData = {
+                visibleCards: combinedData,
+                emptyCards: 0,
+                shovelers: [],
+                totalVisibleASINs: combinedData.length,
+                totalShovelerASINs: 0,
+                totalShovelers: 0
+            };
+        }
+        
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
+        
+        // Sheet 1: Visible Cards
+        const visibleCardsData = [];
+        if (combinedData.visibleCards && combinedData.visibleCards.length > 0) {
+            console.log(`📦 Adding ${combinedData.visibleCards.length} visible cards to Visible Cards sheet`);
+            
+            // Add headers
+            visibleCardsData.push(['ASIN', 'Name', 'Section']);
+            
+            // Add data rows
+            combinedData.visibleCards.forEach(card => {
+                visibleCardsData.push([
+                    card.ASIN || '',
+                    card.Name || '',
+                    card.Section || ''
+                ]);
+            });
+        } else {
+            // Add headers even if no data
+            visibleCardsData.push(['ASIN', 'Name', 'Section']);
+        }
+        
+        const visibleCardsSheet = XLSX.utils.aoa_to_sheet(visibleCardsData);
+        XLSX.utils.book_append_sheet(workbook, visibleCardsSheet, 'Visible Cards');
+        
+        // Sheet 2: Shoveler Data
+        const shovelerData = [];
+        if (combinedData.shovelers && combinedData.shovelers.length > 0) {
+            console.log(`📦 Adding ${combinedData.shovelers.length} shovelers to Shoveler Data sheet`);
+            
+            // Add headers
+            shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
+            
+            // Add data rows
+            combinedData.shovelers.forEach(shoveler => {
+                if (shoveler.asins && shoveler.asins.length > 0) {
+                    shoveler.asins.forEach(asin => {
+                        shovelerData.push([
+                            asin,
+                            `[From Shoveler: ${shoveler.title}]`,
+                            'Shoveler Carousel',
+                            shoveler.title,
+                            shoveler.carouselIndex.toString()
+                        ]);
+                    });
+                }
+            });
+        } else {
+            // Add headers even if no data
+            shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
+        }
+        
+        const shovelerSheet = XLSX.utils.aoa_to_sheet(shovelerData);
+        XLSX.utils.book_append_sheet(workbook, shovelerSheet, 'Shoveler Data');
+        
+        // Generate and download the file
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'wholefoods_items.csv';
+        a.download = 'wholefoods_data_separated.xlsx';
         a.click();
         URL.revokeObjectURL(url);
+        
+        console.log(`✅ XLSX export complete with separate sheets`);
+        console.log(`📊 Export summary: ${combinedData.totalVisibleASINs} visible ASINs (Visible Cards sheet), ${combinedData.totalShovelerASINs} shoveler ASINs (Shoveler Data sheet)`);
     }
 
     function createExportButton() {
@@ -1302,17 +1970,29 @@
         exportBtn.style.cursor = 'pointer';
 
         exportBtn.addEventListener('click', () => {
-            if (lastExtractedData.length === 0) {
-                const { data, emptyCount } = extractDataFromCards();
-                lastExtractedData = data;
-                alert(`${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
-
-                if (data.length === 0) {
-                    alert('No ASIN cards found. Try scrolling or navigating through carousels.');
-                    return;
-                }
+            console.log('📦 Export button clicked - using comprehensive data extraction');
+            
+            // Use comprehensive data extraction
+            const comprehensiveData = extractAllData();
+            
+            // Show summary of what was found
+            const summary = `📊 Data Extraction Complete!\n\n` +
+                `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
+                `Empty Cards: ${comprehensiveData.emptyCards}\n` +
+                `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
+                `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
+                `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
+            
+            alert(summary);
+            
+            if (comprehensiveData.totalVisibleASINs === 0 && comprehensiveData.totalShovelerASINs === 0) {
+                alert('No ASIN data found. Try scrolling or navigating through carousels.');
+                return;
             }
-            downloadCSV(lastExtractedData);
+            
+            // Store for future use and export
+            lastExtractedData = comprehensiveData;
+            downloadXLSX(comprehensiveData);
         });
 
         const refreshBtn = document.createElement('button');
@@ -1325,10 +2005,26 @@
         refreshBtn.style.cursor = 'pointer';
 
         const refreshData = () => {
+            console.log('🔄 Refresh button clicked - using comprehensive data extraction');
+            
+            // Clear previous data
             lastExtractedData = [];
-            const { data, emptyCount } = extractDataFromCards();
-            lastExtractedData = data;
-            alert(`🔄 Refreshed: ${data.length} ASIN(s) found. ${emptyCount} empty card(s) detected.`);
+            
+            // Use comprehensive data extraction
+            const comprehensiveData = extractAllData();
+            
+            // Show summary of what was found
+            const summary = `🔄 Data Refresh Complete!\n\n` +
+                `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
+                `Empty Cards: ${comprehensiveData.emptyCards}\n` +
+                `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
+                `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
+                `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
+            
+            alert(summary);
+            
+            // Store for future use
+            lastExtractedData = comprehensiveData;
         };
 
         refreshBtn.addEventListener('click', refreshData);
@@ -1367,10 +2063,8 @@
         function fetchSharePointData() {
             console.log('🌐 Fetching data from SharePoint...');
 
-            // Show loading feedback
-            const originalButtonText = refreshDataBtn.textContent;
-            refreshDataBtn.textContent = '🔄 Fetching...';
-            refreshDataBtn.disabled = true;
+            // Show loading feedback - function still exists for potential future use
+            console.log('🔄 Fetching SharePoint data...');
 
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -1396,17 +2090,15 @@
                         alert(`❌ Failed to fetch data from SharePoint.\n\nStatus: ${response.status}\nCheck console for details.`);
                     }
 
-                    // Restore button state
-                    refreshDataBtn.textContent = originalButtonText;
-                    refreshDataBtn.disabled = false;
+                    // SharePoint fetch complete
+                    console.log('📡 SharePoint fetch completed');
                 },
                 onerror: function(error) {
                     console.error('❌ Error accessing SharePoint:', error);
                     alert('❌ Error accessing SharePoint data.\n\nThis might be due to:\n- Network connectivity issues\n- Authentication problems\n- SharePoint access restrictions\n\nCheck console for details.');
 
-                    // Restore button state
-                    refreshDataBtn.textContent = originalButtonText;
-                    refreshDataBtn.disabled = false;
+                    // SharePoint fetch error handled
+                    console.log('❌ SharePoint fetch error handled');
                 }
             });
         }
@@ -1479,17 +2171,7 @@
             }
         }
 
-        // Create SharePoint data refresh button
-        const refreshDataBtn = document.createElement('button');
-        refreshDataBtn.textContent = '🔄 Refresh Data from SharePoint';
-        refreshDataBtn.style.padding = '10px';
-        refreshDataBtn.style.backgroundColor = '#20c997';
-        refreshDataBtn.style.color = '#fff';
-        refreshDataBtn.style.border = 'none';
-        refreshDataBtn.style.borderRadius = '5px';
-        refreshDataBtn.style.cursor = 'pointer';
-
-        refreshDataBtn.addEventListener('click', fetchSharePointData);
+        // SharePoint data refresh button - REMOVED per user request
 
         // Create store switching dropdown
         const storeSelectContainer = document.createElement('div');
@@ -1696,6 +2378,33 @@
 
         csrfSettingsBtn.addEventListener('click', showCSRFSettings);
 
+        // Version check button
+        const versionCheckBtn = document.createElement('button');
+        versionCheckBtn.textContent = '🔍 Check for Updates';
+        versionCheckBtn.style.padding = '8px';
+        versionCheckBtn.style.backgroundColor = '#17a2b8';
+        versionCheckBtn.style.color = '#fff';
+        versionCheckBtn.style.border = 'none';
+        versionCheckBtn.style.borderRadius = '4px';
+        versionCheckBtn.style.cursor = 'pointer';
+        versionCheckBtn.style.fontSize = '12px';
+        versionCheckBtn.style.marginTop = '4px';
+
+        versionCheckBtn.addEventListener('click', async () => {
+            versionCheckBtn.textContent = '🔄 Checking...';
+            versionCheckBtn.disabled = true;
+            
+            try {
+                await checkForUpdates(true);
+            } catch (error) {
+                console.error('❌ Error in version check button:', error);
+                alert(`❌ Version check failed: ${error.message}`);
+            } finally {
+                versionCheckBtn.textContent = '🔍 Check for Updates';
+                versionCheckBtn.disabled = false;
+            }
+        });
+
         // Debug info button for troubleshooting
         const debugBtn = document.createElement('button');
         debugBtn.textContent = '🐛 Debug Info';
@@ -1734,41 +2443,7 @@
             alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
         });
 
-        // Create IndexedDB reset button
-        const resetDbBtn = document.createElement('button');
-        resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
-        resetDbBtn.style.padding = '8px';
-        resetDbBtn.style.backgroundColor = '#dc3545';
-        resetDbBtn.style.color = '#fff';
-        resetDbBtn.style.border = 'none';
-        resetDbBtn.style.borderRadius = '4px';
-        resetDbBtn.style.cursor = 'pointer';
-        resetDbBtn.style.fontSize = '12px';
-        resetDbBtn.style.marginTop = '4px';
-
-        resetDbBtn.addEventListener('click', async () => {
-            if (!confirm('Delete the saved item database?\n\nThis will clear all items from IndexedDB. You can reload data from SharePoint afterwards.')) return;
-            
-            try {
-                resetDbBtn.textContent = '🔄 Clearing...';
-                resetDbBtn.disabled = true;
-                
-                await db.delete(); // drops database
-                await db.open();   // recreate schema
-                
-                // Clear timestamp
-                GM_deleteValue('itemDatabaseTimestamp');
-                
-                await updateItemDatabaseStatus();
-                alert('✅ Item DB cleared successfully');
-            } catch (error) {
-                console.error('❌ Error clearing IndexedDB:', error);
-                alert(`❌ Error clearing database: ${error.message}`);
-            } finally {
-                resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
-                resetDbBtn.disabled = false;
-            }
-        });
+        // Reset Item DB button - REMOVED per user request
 
         // Function to update store dropdown options
         const updateStoreDropdown = () => {
@@ -2228,12 +2903,11 @@
         contentContainer.appendChild(itemSearchContainer);
 
         contentContainer.appendChild(uploadBtn);
-        contentContainer.appendChild(refreshDataBtn);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
+        contentContainer.appendChild(versionCheckBtn);
         contentContainer.appendChild(debugBtn);
-        contentContainer.appendChild(resetDbBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
@@ -2361,6 +3035,10 @@
             clearInterval(urlPollingInterval);
             urlPollingInterval = null;
         }
+        if (versionCheckInterval) {
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
+        }
 
         // Reset state
         wtsPanel = null;
@@ -2392,8 +3070,10 @@
                 cardCounterInterval = setInterval(() => {
                     try {
                         if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
-                            const { data, emptyCount } = extractDataFromCards();
-                            counter.textContent = `Visible ASINs: ${data.length} | Empty cards: ${emptyCount}`;
+                            // Use comprehensive data extraction for counter
+                            const comprehensiveData = extractAllData();
+                            // Total now only counts visible cards, not shovelers
+                            counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards}`;
                         } else {
                             console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                             if (cardCounterInterval) {
@@ -2544,6 +3224,10 @@
                     if (urlPollingInterval) {
                         clearInterval(urlPollingInterval);
                         urlPollingInterval = null;
+                    }
+                    if (versionCheckInterval) {
+                        clearInterval(versionCheckInterval);
+                        versionCheckInterval = null;
                     }
                 }
             } catch (error) {
