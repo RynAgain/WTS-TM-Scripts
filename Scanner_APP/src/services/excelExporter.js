@@ -1,9 +1,11 @@
 const ExcelJS = require('exceljs');
 const path = require('path');
+const fs = require('fs').promises;
 
 class ExcelExporter {
     constructor() {
         this.workbook = null;
+        this.maxFiles = 3; // Keep only 3 most recent files
     }
 
     async exportResults(results, filePath) {
@@ -29,6 +31,9 @@ class ExcelExporter {
             
             // Save the workbook
             await this.workbook.xlsx.writeFile(filePath);
+            
+            // Clean up old files after successful export
+            await this.cleanupOldFiles(filePath);
             
             console.log(`✅ Excel export completed: ${filePath}`);
             return filePath;
@@ -400,6 +405,63 @@ class ExcelExporter {
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
         
         console.log(`✅ Store breakdown worksheet created with ${storeStats.size} stores`);
+    }
+
+    async cleanupOldFiles(currentFilePath) {
+        try {
+            const directory = path.dirname(currentFilePath);
+            const currentFileName = path.basename(currentFilePath);
+            
+            // Read all files in the directory
+            const files = await fs.readdir(directory);
+            
+            // Filter for WFM scan result files (Excel files with our naming pattern)
+            const scanFiles = files.filter(file => {
+                return file.startsWith('WFM_Scan_Results') &&
+                       (file.endsWith('.xlsx') || file.endsWith('.xls')) &&
+                       file !== currentFileName; // Exclude the current file
+            });
+            
+            if (scanFiles.length >= this.maxFiles) {
+                // Get file stats to sort by creation/modification time
+                const fileStats = await Promise.all(
+                    scanFiles.map(async (file) => {
+                        const filePath = path.join(directory, file);
+                        const stats = await fs.stat(filePath);
+                        return {
+                            name: file,
+                            path: filePath,
+                            mtime: stats.mtime
+                        };
+                    })
+                );
+                
+                // Sort by modification time (newest first)
+                fileStats.sort((a, b) => b.mtime - a.mtime);
+                
+                // Keep only the most recent (maxFiles - 1) files, since we just created a new one
+                const filesToDelete = fileStats.slice(this.maxFiles - 1);
+                
+                // Delete old files
+                for (const fileInfo of filesToDelete) {
+                    try {
+                        await fs.unlink(fileInfo.path);
+                        console.log(`🗑️ Cleaned up old export file: ${fileInfo.name}`);
+                    } catch (deleteError) {
+                        console.warn(`⚠️ Failed to delete old file ${fileInfo.name}:`, deleteError.message);
+                    }
+                }
+                
+                if (filesToDelete.length > 0) {
+                    console.log(`🧹 Cleaned up ${filesToDelete.length} old export file(s), keeping ${this.maxFiles} most recent files`);
+                }
+            } else {
+                console.log(`📁 Found ${scanFiles.length} existing export files, no cleanup needed (max: ${this.maxFiles})`);
+            }
+        } catch (error) {
+            console.warn('⚠️ Error during file cleanup:', error.message);
+            // Don't throw error - cleanup failure shouldn't prevent export success
+        }
     }
 }
 

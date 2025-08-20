@@ -1,201 +1,229 @@
 # WFM Scanner App
 
-An Electron application that uses Playwright to systematically scan Whole Foods Market items across different stores. The app provides a side-by-side view with the Electron control interface on the left and the Playwright browser window on the right.
+A comprehensive Electron application for systematically scanning Whole Foods Market items across different stores using Playwright automation.
 
 ## Features
+### Catering
+### Item Specific Analysis
 
-- 🏪 **Store Switching**: Automatically switch between different WFM stores using store mapping data
-- 🔍 **Systematic Scanning**: Process item lists with ASINs across multiple stores
-- 📊 **Real-time Progress**: Live progress tracking and result display
-- 📤 **Excel Export**: Comprehensive Excel reports with multiple worksheets
-- 🖥️ **Side-by-Side Display**: Electron app and Playwright browser positioned side-by-side
-- ⚙️ **Configurable Settings**: Adjustable delays, timeouts, and scanning options
+- **Multi-Store Scanning**: Automatically switch between different Whole Foods stores
+- **Comprehensive Data Extraction**: Extract product names, prices, nutrition facts, ingredients, availability, variations, and bundle information
+- **Multi-Agent Processing**: Parallel processing with configurable concurrent agents using shared browser tabs
+- **Bundle Detection**: Identify bundle products with "What's Included" sections
+- **Product Variations**: Detect size/flavor variations with detailed information
+- **Excel Export**: Export results to Excel with comprehensive statistics and multiple worksheets
+- **Real-time Progress**: Live progress tracking with success rates and timing
+- **Side-by-Side Display**: Electron and Playwright windows positioned side-by-side for monitoring
 
-## Prerequisites
+## Installation & Setup
 
-- Node.js (version 16 or higher)
-- Windows, macOS, or Linux
+### Option 1: Download Pre-built Releases (Recommended)
 
-## Installation
+1. Go to the [Releases](../../releases) page
+2. Download the appropriate version for your operating system:
+   - **Windows**: `WFM-Scanner-App-Setup-x.x.x.exe` (installer) or `wfm-scanner-windows.zip` (portable)
+   - **macOS**: `WFM-Scanner-App-x.x.x.dmg` (Intel/Apple Silicon)
+   - **Linux**: `WFM-Scanner-App-x.x.x.AppImage` (portable)
 
-1. **Clone or download the project**
-   ```bash
-   cd Scanner_APP
-   ```
+### Option 2: Build from Source
 
-2. **Install dependencies**
+1. **Clone the repository**
+2. **Navigate to the Scanner_APP directory**
+3. **Install dependencies:**
    ```bash
    npm install
    ```
-
-3. **Install Playwright browsers**
+4. **Install Playwright browsers:**
    ```bash
    npm run install-playwright
    ```
+5. **Run the application:**
+   ```bash
+   npm start
+   ```
+
+## Building with GitHub Actions
+
+This project uses GitHub Actions for automated building across multiple platforms. The builds are triggered:
+
+- **Automatically**: On push to main/master branch
+- **On Release**: When creating a new tag (e.g., `v1.0.0`)
+- **Manually**: Using the "Actions" tab in GitHub
+
+### Creating a Release
+
+1. Create and push a new tag:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+2. GitHub Actions will automatically build for Windows, macOS, and Linux
+3. A new release will be created with all build artifacts
+
+### Build Artifacts
+
+The GitHub Actions workflow produces:
+- **Windows**: `.exe` installer and unpacked directory
+- **macOS**: `.dmg` installer and app bundle (Intel + Apple Silicon)
+- **Linux**: `.AppImage` portable executable and unpacked directory
 
 ## Usage
 
-### 1. Start the Application
+### Running the Application
 
 ```bash
 npm start
 ```
 
-For development mode with DevTools:
-```bash
-npm run dev
-```
+The application will launch with an Electron window for configuration and control.
 
-### 2. Configure the Scan
+### Configuration
+
+1. **Select Store Mapping File**: CSV file with StoreCode and StoreId columns
+2. **Select Item List File**: CSV/Excel file with store codes and ASINs
+3. **Configure Settings**:
+   - Delay between items (ms)
+   - Delay between stores (ms)
+   - Page timeout (ms)
+   - Max retries
+   - Max concurrent agents (1-5 recommended)
+   - Headless mode (disable for side-by-side viewing)
+   - Screenshot capture
+   - Skip existing results
+
+### File Formats
 
 #### Store Mapping File (CSV)
-Create a CSV file with store codes and IDs:
 ```csv
 StoreCode,StoreId
-ABC,12345
-DEF,67890
-GHI,11111
+ATX,10555
+DAL,10556
+HOU,10557
 ```
 
-#### Item List File (Excel/CSV)
-Create a file with store codes and ASINs:
+#### Item List File (CSV/Excel)
 ```csv
-store,asin,name
-ABC,B08N5WRWNW,Example Product 1
-ABC,B07XYZ1234,Example Product 2
-DEF,B09ABC5678,Example Product 3
+store_tlc,asin,name
+ATX,B08XYZ123,Sample Product 1
+DAL,B08ABC456,Sample Product 2
+HOU,B08DEF789,Sample Product 3
 ```
 
-### 3. Run the Scan
+### Multi-Agent Processing
 
-1. **Select Files**: Use the file selection buttons to choose your store mapping and item list files
-2. **Configure Settings**: Adjust delays, timeouts, and other scanning parameters
-3. **Start Scan**: Click "Start Scan" to begin the automated process
-4. **Monitor Progress**: Watch real-time progress and results in the interface
-5. **Export Results**: Save comprehensive Excel reports when the scan completes
+The app supports parallel processing with multiple browser tabs:
+- **Shared Context**: All agents share cookies and store session
+- **Store Boundaries**: Agents work in parallel within each store, then move to next store
+- **Persistent Tabs**: Agent tabs are reused across all stores for optimal performance
+- **Cookie Inheritance**: Store switches automatically propagate to all agent tabs
 
-## Window Layout
+### Data Extraction
 
-The application automatically positions windows side-by-side:
-- **Left Half**: Electron control interface
-- **Right Half**: Playwright browser window (when not in headless mode)
+The scanner extracts comprehensive product information:
+- **Basic Info**: Product name, price, availability
+- **Features**: Nutrition facts, ingredients, add-to-cart button
+- **Variations**: Size/flavor options with individual pricing
+- **Bundles**: "What's Included" sections with part counting
+- **Metadata**: Load times, timestamps, extraction details
 
-The Playwright window scales its content to fit the available space and shows the actual scanning process.
+### Export Features
 
-## Configuration Options
+Results are exported to Excel with multiple worksheets:
+- **Scan Results**: Complete data for all items
+- **Summary**: Overall statistics and success rates
+- **Store Breakdown**: Per-store performance metrics
+- **Enhanced Statistics**: Variation counts, bundle statistics, feature availability
 
-### Scan Settings
-- **Delay between items**: Time to wait between processing each item (500-10000ms)
-- **Delay between stores**: Time to wait when switching stores (1000-30000ms)
-- **Page timeout**: Maximum time to wait for pages to load (5000-60000ms)
-- **Max retries**: Number of retry attempts for failed items (1-10)
+## Development
 
-### Display Options
-- **Headless mode**: Run browser invisibly (faster but no visual feedback)
-- **Capture screenshots**: Save screenshots when errors occur
-- **Skip existing results**: Skip items that have already been processed
+### Project Structure
 
-## File Formats
+```
+Scanner_APP/
+├── .github/workflows/
+│   └── build.yml              # GitHub Actions build workflow
+├── src/
+│   ├── main.js                # Main Electron process
+│   └── services/
+│       ├── scannerService.js  # Core scanning logic
+│       └── excelExporter.js   # Excel export functionality
+├── renderer/
+│   ├── index.html            # Main UI
+│   ├── renderer.js           # UI logic and IPC communication
+│   └── styles.css            # Application styling
+├── sample_data/              # Sample CSV files
+├── package.json             # Dependencies and scripts
+├── .gitignore              # Git ignore rules
+└── README.md               # This file
+```
 
-### Store Mapping CSV
-Required columns:
-- `StoreCode`: 3-letter store identifier (e.g., "ABC")
-- `StoreId`: Numeric store ID used by WFM API
+### Scripts
 
-### Item List Files
-Supported formats: CSV, Excel (.xlsx, .xls)
+- `npm start` - Run the application in development
+- `npm run dev` - Run in development mode
+- `npm run build` - Build for current platform (use GitHub Actions for multi-platform)
+- `npm run install-playwright` - Install Playwright browsers
 
-Required columns (case-insensitive):
-- Store column: `store`, `store_code`, `tlc`, or similar
-- ASIN column: `asin`
-- Optional: `name`, `item_name`, `title` for item names
+### Key Technologies
 
-## Output
+- **Electron**: Desktop application framework
+- **Playwright**: Browser automation
+- **ExcelJS**: Excel file generation
+- **CSV Parser**: CSV file processing
+- **Node.js**: Runtime environment
 
-The application generates Excel files with multiple worksheets:
+## GitHub Actions Workflow
 
-1. **Scan Results**: Detailed results for each item
-   - Store code, ASIN, item name
-   - Success/failure status
-   - Load times and error messages
-   - Clickable URLs to item pages
+The `.github/workflows/build.yml` file defines the automated build process:
 
-2. **Summary**: Overall scan statistics
-   - Total items processed
-   - Success/failure counts and rates
-   - Average load times
-   - Scan date and duration
-
-3. **Store Breakdown**: Per-store statistics
-   - Items processed per store
-   - Success rates by store
-   - Average load times by store
+- **Multi-Platform**: Builds for Windows, macOS, and Linux simultaneously
+- **Code Signing Disabled**: Avoids permission issues during build
+- **Artifact Upload**: Automatically uploads build results
+- **Release Creation**: Creates GitHub releases for tagged versions
+- **Dependency Caching**: Speeds up builds with npm cache
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **CSRF Token Errors**
-   - Ensure you're logged into Whole Foods Market in your default browser
-   - The app extracts CSRF tokens from the page for store switching
+1. **CSRF Token Issues**: The app automatically captures and manages CSRF tokens. If store switching fails, try manual store selection in the browser window.
 
-2. **Store Switch Failures**
-   - Verify store mapping file has correct StoreCode/StoreId pairs
-   - Check that store IDs are valid and active
+2. **Permission Errors**: Ensure the app has permission to create files in the export directory.
 
-3. **Item Loading Failures**
-   - Some ASINs may not be available in certain stores
-   - Network timeouts can cause failures (adjust timeout settings)
+3. **Browser Launch Issues**: Make sure Playwright browsers are installed with `npm run install-playwright`.
 
-4. **Window Positioning Issues**
-   - The app automatically detects screen size and positions windows
-   - Ensure sufficient screen resolution (minimum 1200px width recommended)
+4. **Memory Issues**: For large datasets (300k+ items), the app uses virtual scrolling and efficient memory management.
+
+### Build Issues
+
+If you encounter build issues locally:
+1. Use GitHub Actions for building (recommended)
+2. Clear electron-builder cache: `npx electron-builder install-app-deps`
+3. Try building with code signing disabled: `CSC_IDENTITY_AUTO_DISCOVERY=false npm run build`
 
 ### Performance Tips
 
-1. **Use appropriate delays**: Too short delays may trigger rate limiting
-2. **Enable headless mode**: For faster scanning without visual feedback
-3. **Process in batches**: For large item lists, consider splitting into smaller batches
-4. **Monitor system resources**: Large scans may consume significant CPU/memory
+- Use 2-3 concurrent agents for optimal performance
+- Enable headless mode for faster processing (disables side-by-side viewing)
+- Adjust delays based on network conditions
+- Use skip existing results to resume interrupted scans
 
-## Development
+## Contributing
 
-### Project Structure
-```
-Scanner_APP/
-├── src/
-│   ├── main.js                 # Main Electron process
-│   └── services/
-│       ├── scannerService.js   # Core scanning logic
-│       └── excelExporter.js    # Excel export functionality
-├── renderer/
-│   ├── index.html             # UI layout
-│   ├── styles.css             # UI styling
-│   └── renderer.js            # UI logic and IPC communication
-├── package.json               # Dependencies and scripts
-└── README.md                  # This file
-```
-
-### Building for Distribution
-
-```bash
-npm run build
-```
-
-This creates distributable packages in the `dist/` directory.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test locally with `npm start`
+5. Push to your fork and create a Pull Request
+6. GitHub Actions will automatically test your changes
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - See package.json for details.
 
 ## Support
 
-For issues and questions:
-1. Check the troubleshooting section above
-2. Review console logs in the application
-3. Check the activity log in the app interface
-4. Ensure all prerequisites are installed correctly
-
----
-
-**Note**: This application is designed for testing and monitoring purposes. Please use responsibly and in accordance with Whole Foods Market's terms of service.
+For issues or questions:
+1. Check the [Issues](../../issues) page
+2. Review console logs in the Electron app for debugging information
+3. Use GitHub Actions for reliable cross-platform builds

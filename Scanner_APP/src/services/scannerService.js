@@ -369,38 +369,30 @@ class ScannerService {
             waitUntil: 'networkidle'
         });
         
-        // Check if we can extract a CSRF token, if not, prompt for manual store selection
-        const initialToken = await this.extractCSRFToken();
-        if (!initialToken) {
-            console.log('⚠️ No CSRF token found on initial page load');
-            console.log('🔄 User may need to manually select a store to establish session...');
+        // Use enhanced CSRF token acquisition method
+        console.log('🔑 Attempting to acquire CSRF token...');
+        const initialToken = await this.ensureCSRFToken(this.page);
+        
+        if (initialToken) {
+            console.log('✅ CSRF token successfully acquired');
+        } else {
+            console.log('⚠️ Enhanced CSRF token acquisition failed');
+            console.log('💡 Will attempt fallback methods during store switching');
             
-            // Wait a bit longer for page to fully load
-            await this.delay(3000);
-            
-            // Try again after page has settled
-            const retryToken = await this.extractCSRFToken();
-            if (!retryToken) {
-                console.log('💡 Suggestion: User should manually select a store in the browser to establish a session');
-                console.log('💡 This will generate a CSRF token that can be used for automated store switching');
+            // If running in non-headless mode, give user time to manually select a store
+            if (!this.config.settings.headlessMode) {
+                console.log('⏳ Waiting 15 seconds for potential manual store selection...');
+                console.log('👆 You may manually select a store in the browser window if needed');
+                await this.delay(15000);
                 
-                // If running in non-headless mode, give user time to manually select a store
-                if (!this.config.settings.headlessMode) {
-                    console.log('⏳ Waiting 30 seconds for manual store selection...');
-                    console.log('👆 Please manually select a store in the browser window to continue');
-                    await this.delay(30000);
-                    
-                    // Check again after manual selection time
-                    const manualToken = await this.extractCSRFToken();
-                    if (manualToken) {
-                        console.log('✅ CSRF token found after manual store selection');
-                    } else {
-                        console.log('⚠️ Still no CSRF token found, will use fallback for store switching');
-                    }
+                // Try one more time after potential manual interaction
+                const manualToken = await this.ensureCSRFToken(this.page);
+                if (manualToken) {
+                    console.log('✅ CSRF token found after manual interaction period');
+                } else {
+                    console.log('⚠️ Still no CSRF token found, will use fallback methods');
                 }
             }
-        } else {
-            console.log('✅ CSRF token found on initial page load');
         }
         
         // Initialize agents once at the beginning (they'll be reused across all stores)
@@ -1210,29 +1202,21 @@ class ScannerService {
             const cookies = await this.page.context().cookies();
             console.log(`🍪 Current cookies count: ${cookies.length}`);
             
-            // Enhanced CSRF token extraction based on WtsMain.js patterns
-            let csrfToken = await this.extractCSRFToken();
-            
-            // If no token found, try refreshing the page and extracting again
-            if (!csrfToken) {
-                console.log('🔄 No CSRF token found, refreshing page and retrying...');
-                await this.page.reload({ waitUntil: 'networkidle' });
-                await this.delay(2000);
-                csrfToken = await this.extractCSRFToken();
-            }
+            // Use enhanced CSRF token acquisition method
+            let csrfToken = await this.ensureCSRFToken(this.page);
             
             if (!csrfToken) {
-                console.warn('⚠️ CSRF token still not found after refresh, trying fallback');
+                console.warn('⚠️ Enhanced CSRF token acquisition failed, trying fallback');
                 const fallbackToken = await this.getFallbackCSRFToken();
                 if (!fallbackToken) {
                     console.error('❌ No CSRF token available (including fallback)');
                     // Try alternative method without token
                     return await this.alternativeStoreSwitch(storeId, storeCode);
                 }
-                return await this.performStoreSwitch(storeId, storeCode, fallbackToken);
+                csrfToken = fallbackToken;
             }
             
-            console.log(`✅ CSRF token found: ${csrfToken.substring(0, 20)}...`);
+            console.log(`✅ CSRF token acquired: ${csrfToken.substring(0, 20)}...`);
             return await this.performStoreSwitch(storeId, storeCode, csrfToken);
             
         } catch (error) {
@@ -1241,7 +1225,124 @@ class ScannerService {
             
             // Final fallback - try alternative method
             console.log(`🔄 Attempting final fallback store switch...`);
+            const storeId = this.storeMappings.get(storeCode);
             return await this.alternativeStoreSwitch(storeId, storeCode);
+        }
+    }
+
+    async ensureCSRFToken(page) {
+        try {
+            // Check if we already have a CSRF token
+            if (this.csrfToken) {
+                console.log('🔑 Using existing CSRF token');
+                return this.csrfToken;
+            }
+
+            console.log('🔍 Looking for CSRF token...');
+            
+            // Try to find CSRF token in various places
+            const token = await page.evaluate(() => {
+                // Check meta tags
+                const metaToken = document.querySelector('meta[name="csrf-token"]');
+                if (metaToken) return metaToken.getAttribute('content');
+                
+                // Check form inputs
+                const inputToken = document.querySelector('input[name="_token"]');
+                if (inputToken) return inputToken.value;
+                
+                // Check window object
+                if (window.csrfToken) return window.csrfToken;
+                if (window._token) return window._token;
+                
+                return null;
+            });
+
+            if (token) {
+                this.csrfToken = token;
+                console.log('✅ CSRF token found and cached');
+                return token;
+            }
+
+            // If no token found, try enhanced acquisition method
+            console.log('⚠️ No CSRF token found - attempting enhanced acquisition...');
+            return await this.enhancedCSRFTokenAcquisition(page);
+            
+        } catch (error) {
+            console.error('❌ Error getting CSRF token:', error);
+            return null;
+        }
+    }
+
+    async enhancedCSRFTokenAcquisition(page) {
+        try {
+            console.log('🔄 Starting enhanced CSRF token acquisition...');
+            
+            // Step 1: Look for store selector button
+            console.log('🔍 Looking for store selector button...');
+            const storeSelectorButton = await page.$('button[aria-label="See store details"]');
+            
+            if (!storeSelectorButton) {
+                console.log('❌ Store selector button not found');
+                return await this.extractCSRFToken();
+            }
+            
+            console.log('✅ Found store selector button, clicking...');
+            await storeSelectorButton.click();
+            
+            // Wait for modal or dropdown to appear
+            await this.delay(2000);
+            
+            // Step 2: Look for "Make this my store" button
+            console.log('🔍 Looking for "Make this my store" button...');
+            const makeStoreButton = await page.$('span.w-makethismystore');
+            
+            if (!makeStoreButton) {
+                console.log('❌ "Make this my store" button not found');
+                return await this.extractCSRFToken();
+            }
+            
+            console.log('✅ Found "Make this my store" button, clicking...');
+            
+            // Set up network request listener before clicking
+            const tokenPromise = new Promise((resolve) => {
+                const requestHandler = (request) => {
+                    const headers = request.headers();
+                    if (headers['anti-csrftoken-a2z']) {
+                        console.log('🔑 Captured CSRF token from network request!');
+                        const token = headers['anti-csrftoken-a2z'];
+                        page.off('request', requestHandler);
+                        resolve(token);
+                    }
+                };
+                page.on('request', requestHandler);
+                
+                // Timeout after 10 seconds
+                setTimeout(() => {
+                    page.off('request', requestHandler);
+                    resolve(null);
+                }, 10000);
+            });
+            
+            // Click the "Make this my store" button
+            await makeStoreButton.click();
+            
+            // Wait for the network request to complete
+            const capturedToken = await tokenPromise;
+            
+            if (capturedToken) {
+                this.csrfToken = capturedToken;
+                await this.persistCSRFToken(capturedToken);
+                console.log('✅ Enhanced CSRF token acquisition successful!');
+                return capturedToken;
+            } else {
+                console.log('⚠️ No token captured from network request, trying fallback extraction...');
+                await this.delay(3000); // Wait for page to update
+                return await this.extractCSRFToken();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error in enhanced CSRF token acquisition:', error);
+            return await this.extractCSRFToken();
         }
     }
 

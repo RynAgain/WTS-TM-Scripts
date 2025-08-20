@@ -11,6 +11,7 @@ class WFMScannerUI {
         this.logMessages = [];
         this.screenDimensions = null;
         this.savedConfig = null;
+        this.filteredResults = [];
         
         this.initializeUI();
         this.setupEventListeners();
@@ -60,7 +61,7 @@ class WFMScannerUI {
                 this.elements.headlessMode.checked = settings.headlessMode || false;
                 this.elements.captureScreenshots.checked = settings.captureScreenshots || false;
                 this.elements.skipExistingResults.checked = settings.skipExistingResults || false;
-                this.elements.maxConcurrentAgents.value = settings.maxConcurrentAgents || 1;
+                this.elements.maxConcurrentAgents.value = settings.maxConcurrentAgents || 3;
                 this.log('⚙️ Restored previous settings', 'info');
             }
             
@@ -72,7 +73,7 @@ class WFMScannerUI {
     }
 
     initializeUI() {
-        // Get DOM elements
+        // Get DOM elements with new IDs
         this.elements = {
             // File selection
             selectStoreMappingBtn: document.getElementById('selectStoreMappingBtn'),
@@ -86,7 +87,7 @@ class WFMScannerUI {
             pageTimeout: document.getElementById('pageTimeout'),
             maxRetries: document.getElementById('maxRetries'),
             headlessMode: document.getElementById('headlessMode'),
-            captureScreenshots: document.getElementById('captureScreenshots'),
+            captureScreenshots: document.getElementById('captureScreenshots'), 
             skipExistingResults: document.getElementById('skipExistingResults'),
             maxConcurrentAgents: document.getElementById('maxConcurrentAgents'),
             
@@ -98,16 +99,17 @@ class WFMScannerUI {
             // Progress
             progressFill: document.getElementById('progressFill'),
             progressText: document.getElementById('progressText'),
-            progressPercent: document.getElementById('progressPercent'),
             currentStore: document.getElementById('currentStore'),
             itemsProcessed: document.getElementById('itemsProcessed'),
             totalItems: document.getElementById('totalItems'),
             successRate: document.getElementById('successRate'),
-            errorCount: document.getElementById('errorCount'),
+            activeAgents: document.getElementById('activeAgents'),
             elapsedTime: document.getElementById('elapsedTime'),
             
             // Results
             resultsBody: document.getElementById('resultsBody'),
+            searchFilter: document.getElementById('searchFilter'),
+            statusFilter: document.getElementById('statusFilter'),
             
             // Log
             logOutput: document.getElementById('logOutput'),
@@ -118,7 +120,7 @@ class WFMScannerUI {
         // Set headless mode to false by default for side-by-side viewing
         this.elements.headlessMode.checked = false;
 
-        this.log('🚀 WFM Scanner App initialized', 'info');
+        this.log('🚀 WFM Scanner App initialized with new responsive UI', 'info');
         this.log('📐 Configured for side-by-side window display', 'info');
         this.updateUI();
     }
@@ -153,6 +155,15 @@ class WFMScannerUI {
 
         this.elements.exportLogBtn.addEventListener('click', () => {
             this.exportLog();
+        });
+
+        // Search and filter
+        this.elements.searchFilter.addEventListener('input', () => {
+            this.filterResults();
+        });
+
+        this.elements.statusFilter.addEventListener('change', () => {
+            this.filterResults();
         });
 
         // Settings change validation
@@ -266,6 +277,11 @@ class WFMScannerUI {
             isValid = false;
         }
 
+        if (settings.maxConcurrentAgents < 1) {
+            errors.push('Max concurrent agents must be at least 1');
+            isValid = false;
+        }
+
         if (!isValid) {
             errors.forEach(error => this.log(`⚠️ ${error}`, 'warning'));
         }
@@ -323,7 +339,8 @@ class WFMScannerUI {
                 this.log(`📐 Playwright window size: ${this.screenDimensions.playwrightWidth}x${this.screenDimensions.playwrightHeight}`, 'info');
             }
 
-            this.log('🚀 Starting scan...', 'info');
+            this.log('🚀 Starting scan with multi-agent processing...', 'info');
+            this.log(`🤖 Using ${config.settings.maxConcurrentAgents} concurrent agents for parallel processing`, 'info');
             
             // Add guidance for manual store selection if needed
             if (!config.settings.headlessMode) {
@@ -334,12 +351,14 @@ class WFMScannerUI {
             this.isScanning = true;
             this.scanStartTime = Date.now();
             this.startElapsedTimer();
+            this.clearResults(); // Clear previous results
             this.updateUI();
 
             const result = await ipcRenderer.invoke('start-scan', config);
             
             if (result.success) {
                 this.log(`✅ Scan completed successfully! Processed ${result.totalResults} items`, 'success');
+                this.log(`📊 Final statistics: ${this.scanResults.filter(r => r.success).length} successful, ${this.scanResults.filter(r => !r.success).length} failed`, 'info');
             } else {
                 this.log(`❌ Scan failed: ${result.error}`, 'error');
             }
@@ -383,11 +402,12 @@ class WFMScannerUI {
             const exportPath = await ipcRenderer.invoke('select-export-location');
             if (!exportPath) return;
 
-            this.log('📤 Exporting results...', 'info');
+            this.log('📤 Exporting results to Excel...', 'info');
             const result = await ipcRenderer.invoke('export-results', exportPath);
             
             if (result.success) {
                 this.log(`✅ Results exported to: ${result.filePath}`, 'success');
+                this.log(`📊 Exported ${this.scanResults.length} results with comprehensive statistics`, 'info');
             } else {
                 this.log(`❌ Export failed: ${result.error}`, 'error');
             }
@@ -398,21 +418,20 @@ class WFMScannerUI {
     }
 
     updateProgress(progress) {
-        const { currentStore, itemsProcessed, totalItems, successCount, errorCount } = progress;
+        const { currentStore, itemsProcessed, totalItems, successCount, errorCount, activeAgents } = progress;
         
         // Update progress bar
         const percentage = totalItems > 0 ? Math.round((itemsProcessed / totalItems) * 100) : 0;
         this.elements.progressFill.style.width = `${percentage}%`;
-        this.elements.progressPercent.textContent = `${percentage}%`;
         
         // Update progress text
-        this.elements.progressText.textContent = `Processing ${currentStore || 'Unknown Store'}...`;
+        this.elements.progressText.textContent = `Processing ${currentStore || 'Unknown Store'}... (${percentage}%)`;
         
         // Update stats
         this.elements.currentStore.textContent = currentStore || '-';
         this.elements.itemsProcessed.textContent = itemsProcessed.toLocaleString();
         this.elements.totalItems.textContent = totalItems.toLocaleString();
-        this.elements.errorCount.textContent = errorCount.toLocaleString();
+        this.elements.activeAgents.textContent = activeAgents || 0;
         
         // Update success rate
         const successRate = itemsProcessed > 0 ? Math.round((successCount / itemsProcessed) * 100) : 0;
@@ -427,67 +446,8 @@ class WFMScannerUI {
             window.scannerUI = this;
         }
         
-        // Initialize virtual scroll if not already done
-        if (!this.virtualScrollContainer) {
-            this.initializeVirtualScroll();
-        }
-        
-        // Update virtual scroll display efficiently
-        this.updateVirtualScrollIncremental();
-        
-        // Only show recent results in UI for performance (but keep all in scanResults)
-        const maxDisplayResults = 500; // Increased from 100 to 500
-        
-        // Add to results table with enhanced data
-        const resultRow = document.createElement('div');
-        resultRow.className = `result-row ${result.success ? 'success' : 'error'} new`;
-        
-        // Enhanced result display with new data fields including variations and bundle data
-        const extractedName = result.extractedName && result.extractedName !== 'N/A' ? result.extractedName : '-';
-        const price = result.price && result.price !== 'N/A' ? result.price : '-';
-        const nutrition = result.hasNutritionFacts ? '✅' : '❌';
-        const ingredients = result.hasIngredients ? '✅' : '❌';
-        const addToCart = result.hasAddToCart ? '✅' : '❌';
-        const available = result.isAvailable ? '✅ Available' : '❌ Unavailable';
-        const variations = result.variationCount || 0;
-        const isBundle = result.isBundle ? '✅ Bundle' : '❌ Single';
-        const bundleParts = result.bundlePartsCount || 0;
-        
-        resultRow.innerHTML = `
-            <span class="store-cell">${result.store}</span>
-            <span class="asin-cell">${result.asin}</span>
-            <span class="name-cell" title="${result.name}">${result.name}</span>
-            <span class="extracted-name-cell" title="${extractedName}">${extractedName}</span>
-            <span class="price-cell">${price}</span>
-            <span class="nutrition-cell">${nutrition}</span>
-            <span class="ingredients-cell">${ingredients}</span>
-            <span class="cart-cell">${addToCart}</span>
-            <span class="availability-cell ${result.isAvailable ? 'available' : 'unavailable'}">${available}</span>
-            <span class="variations-cell">${variations}</span>
-            <span class="bundle-cell">${isBundle}</span>
-            <span class="bundle-parts-cell">${bundleParts}</span>
-            <span class="status-cell">${result.success ? '✅ Success' : '❌ Error'}</span>
-            <span class="time-cell">${result.loadTime || '-'}ms</span>
-            <span class="timestamp-cell">${new Date(result.timestamp).toLocaleTimeString()}</span>
-        `;
-        
-        // Remove "no results" message if it exists
-        const noResults = this.elements.resultsBody.querySelector('.no-results');
-        if (noResults) {
-            noResults.remove();
-        }
-        
-        // Add new result at the top
-        this.elements.resultsBody.insertBefore(resultRow, this.elements.resultsBody.firstChild);
-        
-        // Limit displayed results for performance (but keep all data in scanResults)
-        const rows = this.elements.resultsBody.querySelectorAll('.result-row');
-        if (rows.length > maxDisplayResults) {
-            // Remove oldest displayed results (but keep all data in scanResults array)
-            for (let i = maxDisplayResults; i < rows.length; i++) {
-                rows[i].remove();
-            }
-        }
+        // Update filtered results and display
+        this.filterResults();
         
         // Enhanced logging with new data including bundle information
         const status = result.success ? '✅' : '❌';
@@ -517,84 +477,99 @@ class WFMScannerUI {
         this.updateUI();
     }
 
-    initializeVirtualScroll() {
-        // Virtual scroll implementation for handling large result sets
-        this.virtualScrollContainer = {
-            itemHeight: 40, // Height of each result row
-            visibleItems: Math.ceil(window.innerHeight / 40),
-            scrollTop: 0,
-            totalItems: 0
-        };
+    filterResults() {
+        const searchTerm = this.elements.searchFilter.value.toLowerCase();
+        const statusFilter = this.elements.statusFilter.value;
         
-        console.log('📊 Virtual scroll initialized for large result sets');
-    }
-
-    updateVirtualScrollIncremental() {
-        // Update virtual scroll when new results are added
-        if (this.virtualScrollContainer) {
-            this.virtualScrollContainer.totalItems = this.scanResults.length;
+        this.filteredResults = this.scanResults.filter(result => {
+            // Search filter
+            const matchesSearch = !searchTerm || 
+                result.store.toLowerCase().includes(searchTerm) ||
+                result.asin.toLowerCase().includes(searchTerm) ||
+                (result.name && result.name.toLowerCase().includes(searchTerm)) ||
+                (result.extractedName && result.extractedName.toLowerCase().includes(searchTerm));
             
-            // Only update display if we have a large number of results
-            if (this.scanResults.length > 1000) {
-                this.renderVirtualScrollItems();
-            }
-        }
+            // Status filter
+            const matchesStatus = !statusFilter || 
+                (statusFilter === 'success' && result.success) ||
+                (statusFilter === 'error' && !result.success) ||
+                (statusFilter === 'timeout' && result.error && result.error.includes('timeout'));
+            
+            return matchesSearch && matchesStatus;
+        });
+        
+        this.renderResults();
     }
 
-    renderVirtualScrollItems() {
-        // Render only visible items for performance with large datasets
-        const container = this.virtualScrollContainer;
-        const startIndex = Math.floor(container.scrollTop / container.itemHeight);
-        const endIndex = Math.min(startIndex + container.visibleItems + 5, this.scanResults.length);
+    renderResults() {
+        const tbody = this.elements.resultsBody;
         
-        // Clear existing items
-        this.elements.resultsBody.innerHTML = '';
-        
-        // Render visible items
-        for (let i = startIndex; i < endIndex; i++) {
-            const result = this.scanResults[i];
-            if (result) {
-                const resultRow = this.createResultRow(result);
-                this.elements.resultsBody.appendChild(resultRow);
-            }
+        if (this.filteredResults.length === 0) {
+            tbody.innerHTML = `
+                <div class="no-results">
+                    <div class="no-results-icon">📊</div>
+                    <div class="no-results-text">No scan results yet</div>
+                    <div class="no-results-subtext">Configure your settings and start scanning to see results here</div>
+                </div>
+            `;
+            return;
         }
         
-        console.log(`📊 Virtual scroll rendered items ${startIndex}-${endIndex} of ${this.scanResults.length}`);
+        // Clear existing results
+        tbody.innerHTML = '';
+        
+        // Render recent results (limit for performance)
+        const maxDisplay = 500;
+        const resultsToShow = this.filteredResults.slice(-maxDisplay);
+        
+        resultsToShow.reverse().forEach(result => {
+            const row = this.createResultRow(result);
+            tbody.appendChild(row);
+        });
     }
 
     createResultRow(result) {
-        const resultRow = document.createElement('div');
-        resultRow.className = `result-row ${result.success ? 'success' : 'error'}`;
+        const row = document.createElement('div');
+        row.className = `table-row ${result.success ? 'success' : 'error'}`;
         
         const extractedName = result.extractedName && result.extractedName !== 'N/A' ? result.extractedName : '-';
         const price = result.price && result.price !== 'N/A' ? result.price : '-';
         const nutrition = result.hasNutritionFacts ? '✅' : '❌';
         const ingredients = result.hasIngredients ? '✅' : '❌';
         const addToCart = result.hasAddToCart ? '✅' : '❌';
-        const available = result.isAvailable ? '✅ Available' : '❌ Unavailable';
+        const available = result.isAvailable ? '✅' : '❌';
         const variations = result.variationCount || 0;
-        const isBundle = result.isBundle ? '✅ Bundle' : '❌ Single';
+        const isBundle = result.isBundle ? '✅' : '❌';
         const bundleParts = result.bundlePartsCount || 0;
+        const status = result.success ? '✅ Success' : '❌ Error';
+        const loadTime = result.loadTime ? `${result.loadTime}ms` : '-';
+        const timestamp = new Date(result.timestamp).toLocaleTimeString();
         
-        resultRow.innerHTML = `
-            <span class="store-cell">${result.store}</span>
-            <span class="asin-cell">${result.asin}</span>
-            <span class="name-cell" title="${result.name}">${result.name}</span>
-            <span class="extracted-name-cell" title="${extractedName}">${extractedName}</span>
-            <span class="price-cell">${price}</span>
-            <span class="nutrition-cell">${nutrition}</span>
-            <span class="ingredients-cell">${ingredients}</span>
-            <span class="cart-cell">${addToCart}</span>
-            <span class="availability-cell ${result.isAvailable ? 'available' : 'unavailable'}">${available}</span>
-            <span class="variations-cell">${variations}</span>
-            <span class="bundle-cell">${isBundle}</span>
-            <span class="bundle-parts-cell">${bundleParts}</span>
-            <span class="status-cell">${result.success ? '✅ Success' : '❌ Error'}</span>
-            <span class="time-cell">${result.loadTime || '-'}ms</span>
-            <span class="timestamp-cell">${new Date(result.timestamp).toLocaleTimeString()}</span>
+        row.innerHTML = `
+            <div class="table-cell col-store">${result.store}</div>
+            <div class="table-cell col-asin">${result.asin}</div>
+            <div class="table-cell col-name" title="${result.name || ''}">${result.name || '-'}</div>
+            <div class="table-cell col-extracted" title="${extractedName}">${extractedName}</div>
+            <div class="table-cell col-price">${price}</div>
+            <div class="table-cell col-nutrition">${nutrition}</div>
+            <div class="table-cell col-ingredients">${ingredients}</div>
+            <div class="table-cell col-cart">${addToCart}</div>
+            <div class="table-cell col-available">${available}</div>
+            <div class="table-cell col-variations">${variations}</div>
+            <div class="table-cell col-bundle">${isBundle}</div>
+            <div class="table-cell col-bundle-parts">${bundleParts}</div>
+            <div class="table-cell col-status status-${result.success ? 'success' : 'error'}">${status}</div>
+            <div class="table-cell col-time">${loadTime}</div>
+            <div class="table-cell col-timestamp">${timestamp}</div>
         `;
         
-        return resultRow;
+        return row;
+    }
+
+    clearResults() {
+        this.scanResults = [];
+        this.filteredResults = [];
+        this.renderResults();
     }
 
     startElapsedTimer() {
@@ -629,9 +604,9 @@ class WFMScannerUI {
         
         // Update button text based on state
         if (this.isScanning) {
-            this.elements.startScanBtn.textContent = '🔄 Scanning...';
+            this.elements.startScanBtn.innerHTML = '<span class="btn-icon">🔄</span>Scanning...';
         } else {
-            this.elements.startScanBtn.textContent = '🚀 Start Scan';
+            this.elements.startScanBtn.innerHTML = '<span class="btn-icon">▶️</span>Start Scan';
         }
     }
 
@@ -647,8 +622,11 @@ class WFMScannerUI {
         
         // Create log element
         const logElement = document.createElement('div');
-        logElement.className = `log-${type}`;
-        logElement.textContent = `[${timestamp}] ${message}`;
+        logElement.className = `log-entry ${type}`;
+        logElement.innerHTML = `
+            <span class="log-time">[${timestamp}]</span>
+            <span class="log-message">${message}</span>
+        `;
         
         // Add to log output
         this.elements.logOutput.appendChild(logElement);
