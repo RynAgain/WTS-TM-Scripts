@@ -2390,14 +2390,19 @@
         versionCheckBtn.style.fontSize = '12px';
         versionCheckBtn.style.marginTop = '4px';
 
-        versionCheckBtn.addEventListener('click', () => {
+        versionCheckBtn.addEventListener('click', async () => {
             versionCheckBtn.textContent = '🔄 Checking...';
             versionCheckBtn.disabled = true;
             
-            checkForUpdates(true).finally(() => {
+            try {
+                await checkForUpdates(true);
+            } catch (error) {
+                console.error('❌ Error in version check button:', error);
+                alert(`❌ Version check failed: ${error.message}`);
+            } finally {
                 versionCheckBtn.textContent = '🔍 Check for Updates';
                 versionCheckBtn.disabled = false;
-            });
+            }
         });
 
         // Debug info button for troubleshooting
