@@ -118,9 +118,15 @@
     // FIXED: Add interval tracking for proper cleanup
     let cardCounterInterval = null;
     let urlPollingInterval = null;
+    let versionCheckInterval = null;
 
     // FIXED: Add initialization guard to prevent overlapping runs
     let _initializing = false;
+
+    // Version checking variables
+    const CURRENT_VERSION = '1.3.012';
+    const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js';
+    const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
     let capturedCSRFToken = null;
@@ -335,6 +341,12 @@
             urlPollingInterval = null;
         }
 
+        if (versionCheckInterval) {
+            console.log('🧹 Clearing version check interval:', versionCheckInterval);
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
+        }
+
         isInitialized = false;
         wtsPanel = null;
     }
@@ -353,8 +365,225 @@
         return null;
     }
 
+    // Version checking functionality
+    async function checkForUpdates(showNoUpdateMessage = false) {
+        try {
+            console.log('🔍 Checking for script updates...');
+            
+            const lastCheck = GM_getValue('lastVersionCheck', 0);
+            const now = Date.now();
+            
+            // Don't check too frequently unless explicitly requested
+            if (!showNoUpdateMessage && (now - lastCheck) < VERSION_CHECK_INTERVAL) {
+                console.log('⏭️ Version check skipped - checked recently');
+                return;
+            }
+            
+            // Fetch the latest version from GitHub
+            const response = await fetch(GITHUB_VERSION_URL, {
+                method: 'GET',
+                cache: 'no-cache',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const scriptContent = await response.text();
+            
+            // Extract version from the script content
+            const versionMatch = scriptContent.match(/@version\s+([^\s]+)/);
+            if (!versionMatch) {
+                throw new Error('Could not extract version from GitHub script');
+            }
+            
+            const latestVersion = versionMatch[1].trim();
+            console.log(`📋 Current version: ${CURRENT_VERSION}`);
+            console.log(`📋 Latest version: ${latestVersion}`);
+            
+            // Update last check timestamp
+            GM_setValue('lastVersionCheck', now);
+            
+            // Compare versions
+            if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
+                console.log('🆕 New version available!');
+                showUpdateNotification(latestVersion);
+            } else {
+                console.log('✅ Script is up to date');
+                if (showNoUpdateMessage) {
+                    alert(`✅ You're running the latest version!\n\nCurrent: ${CURRENT_VERSION}\nLatest: ${latestVersion}`);
+                }
+            }
+            
+        } catch (error) {
+            console.error('❌ Error checking for updates:', error);
+            if (showNoUpdateMessage) {
+                alert(`❌ Failed to check for updates: ${error.message}\n\nPlease check your internet connection or try again later.`);
+            }
+        }
+    }
+    
+    function isNewerVersion(latest, current) {
+        // Simple version comparison - assumes format like "1.3.012"
+        const latestParts = latest.split('.').map(part => parseInt(part, 10));
+        const currentParts = current.split('.').map(part => parseInt(part, 10));
+        
+        // Pad arrays to same length
+        const maxLength = Math.max(latestParts.length, currentParts.length);
+        while (latestParts.length < maxLength) latestParts.push(0);
+        while (currentParts.length < maxLength) currentParts.push(0);
+        
+        // Compare each part
+        for (let i = 0; i < maxLength; i++) {
+            if (latestParts[i] > currentParts[i]) {
+                return true;
+            } else if (latestParts[i] < currentParts[i]) {
+                return false;
+            }
+        }
+        
+        return false; // Versions are equal
+    }
+    
+    function showUpdateNotification(latestVersion) {
+        const updateModal = document.createElement('div');
+        updateModal.style.position = 'fixed';
+        updateModal.style.top = '0';
+        updateModal.style.left = '0';
+        updateModal.style.width = '100%';
+        updateModal.style.height = '100%';
+        updateModal.style.backgroundColor = 'rgba(0,0,0,0.7)';
+        updateModal.style.zIndex = '2147483647';
+        updateModal.style.display = 'flex';
+        updateModal.style.alignItems = 'center';
+        updateModal.style.justifyContent = 'center';
+        updateModal.style.fontFamily = 'sans-serif';
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.backgroundColor = '#fff';
+        modalContent.style.padding = '30px';
+        modalContent.style.borderRadius = '12px';
+        modalContent.style.boxShadow = '0 8px 32px rgba(0,0,0,0.3)';
+        modalContent.style.maxWidth = '500px';
+        modalContent.style.width = '90%';
+        modalContent.style.textAlign = 'center';
+        modalContent.style.border = '3px solid #28a745';
+        
+        modalContent.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">🆕</div>
+            <h2 style="margin: 0 0 15px 0; color: #28a745; font-size: 24px;">Update Available!</h2>
+            <p style="margin: 0 0 20px 0; font-size: 16px; color: #333; line-height: 1.5;">
+                A new version of WTS Tools is available on GitHub.
+            </p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                <div style="font-size: 14px; color: #666; margin-bottom: 8px;">
+                    <strong>Current Version:</strong> ${CURRENT_VERSION}
+                </div>
+                <div style="font-size: 14px; color: #28a745;">
+                    <strong>Latest Version:</strong> ${latestVersion}
+                </div>
+            </div>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="updateNowBtn" style="
+                    padding: 12px 24px;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    font-weight: bold;
+                    transition: background-color 0.2s;
+                ">Update Now</button>
+                <button id="remindLaterBtn" style="
+                    padding: 12px 24px;
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">Remind Later</button>
+                <button id="skipVersionBtn" style="
+                    padding: 12px 24px;
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 16px;
+                ">Skip This Version</button>
+            </div>
+            <p style="margin: 20px 0 0 0; font-size: 12px; color: #666;">
+                Updates include bug fixes, new features, and improvements.
+            </p>
+        `;
+        
+        updateModal.appendChild(modalContent);
+        document.body.appendChild(updateModal);
+        
+        // Add hover effects
+        const updateBtn = document.getElementById('updateNowBtn');
+        const remindBtn = document.getElementById('remindLaterBtn');
+        const skipBtn = document.getElementById('skipVersionBtn');
+        
+        updateBtn.addEventListener('mouseenter', () => {
+            updateBtn.style.backgroundColor = '#218838';
+        });
+        updateBtn.addEventListener('mouseleave', () => {
+            updateBtn.style.backgroundColor = '#28a745';
+        });
+        
+        // Event handlers
+        updateBtn.addEventListener('click', () => {
+            window.open('https://github.com/RynAgain/WTS-TM-Scripts', '_blank');
+            document.body.removeChild(updateModal);
+        });
+        
+        remindBtn.addEventListener('click', () => {
+            // Reset last check time to allow checking again sooner
+            GM_setValue('lastVersionCheck', 0);
+            document.body.removeChild(updateModal);
+        });
+        
+        skipBtn.addEventListener('click', () => {
+            // Mark this version as skipped
+            GM_setValue('skippedVersion', latestVersion);
+            document.body.removeChild(updateModal);
+        });
+        
+        // Close on background click
+        updateModal.addEventListener('click', (e) => {
+            if (e.target === updateModal) {
+                document.body.removeChild(updateModal);
+            }
+        });
+    }
+    
+    function startVersionChecking() {
+        console.log('🔍 Starting automatic version checking...');
+        
+        // Check immediately on startup (but don't show "no update" message)
+        setTimeout(() => {
+            checkForUpdates(false);
+        }, 5000); // Wait 5 seconds after startup
+        
+        // Set up periodic checking
+        versionCheckInterval = setInterval(() => {
+            checkForUpdates(false);
+        }, VERSION_CHECK_INTERVAL);
+        
+        console.log('✅ Version checking initialized');
+    }
+
     // Start network interception immediately
     startNetworkInterception();
+    
+    // Start version checking
+    startVersionChecking();
 
     function extractDataFromCards() {
         const cards = document.querySelectorAll('[data-csa-c-type="item"][data-csa-c-item-type="asin"]');
@@ -732,15 +961,16 @@
         console.log('✅ Comprehensive data extraction complete:', {
             visibleASINs: combinedData.totalVisibleASINs,
             shovelerASINs: combinedData.totalShovelerASINs,
-            totalShovelers: combinedData.totalShovelers
+            totalShovelers: combinedData.totalShovelers,
+            totalASINsExcludingShovelers: combinedData.totalVisibleASINs // Only count visible cards in total
         });
         
         return combinedData;
     }
 
-    // Enhanced CSV download function that handles both visible cards and shoveler data
-    function downloadCSV(combinedData) {
-        console.log('📦 Starting CSV export with comprehensive data...');
+    // Enhanced XLSX download function that creates separate sheets for visible cards and shoveler data
+    function downloadXLSX(combinedData) {
+        console.log('📦 Starting XLSX export with separate sheets...');
         
         // If legacy format (array of rows), convert to new format
         if (Array.isArray(combinedData) && combinedData.length > 0 && combinedData[0].ASIN) {
@@ -755,58 +985,75 @@
             };
         }
         
-        const csvRows = [];
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
         
-        // Add visible cards data
+        // Sheet 1: Visible Cards
+        const visibleCardsData = [];
         if (combinedData.visibleCards && combinedData.visibleCards.length > 0) {
-            console.log(`📦 Adding ${combinedData.visibleCards.length} visible cards to CSV`);
+            console.log(`📦 Adding ${combinedData.visibleCards.length} visible cards to Visible Cards sheet`);
+            
+            // Add headers
+            visibleCardsData.push(['ASIN', 'Name', 'Section']);
+            
+            // Add data rows
             combinedData.visibleCards.forEach(card => {
-                csvRows.push({
-                    ASIN: card.ASIN || '',
-                    Name: card.Name || '',
-                    Section: card.Section || '',
-                    Type: 'Visible Card',
-                    ShovelerTitle: '',
-                    ShovelerIndex: ''
-                });
+                visibleCardsData.push([
+                    card.ASIN || '',
+                    card.Name || '',
+                    card.Section || ''
+                ]);
             });
+        } else {
+            // Add headers even if no data
+            visibleCardsData.push(['ASIN', 'Name', 'Section']);
         }
         
-        // Add shoveler data
+        const visibleCardsSheet = XLSX.utils.aoa_to_sheet(visibleCardsData);
+        XLSX.utils.book_append_sheet(workbook, visibleCardsSheet, 'Visible Cards');
+        
+        // Sheet 2: Shoveler Data
+        const shovelerData = [];
         if (combinedData.shovelers && combinedData.shovelers.length > 0) {
-            console.log(`📦 Adding ${combinedData.shovelers.length} shovelers to CSV`);
+            console.log(`📦 Adding ${combinedData.shovelers.length} shovelers to Shoveler Data sheet`);
+            
+            // Add headers
+            shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
+            
+            // Add data rows
             combinedData.shovelers.forEach(shoveler => {
                 if (shoveler.asins && shoveler.asins.length > 0) {
                     shoveler.asins.forEach(asin => {
-                        csvRows.push({
-                            ASIN: asin,
-                            Name: `[From Shoveler: ${shoveler.title}]`,
-                            Section: 'Shoveler Carousel',
-                            Type: 'Shoveler ASIN',
-                            ShovelerTitle: shoveler.title,
-                            ShovelerIndex: shoveler.carouselIndex.toString()
-                        });
+                        shovelerData.push([
+                            asin,
+                            `[From Shoveler: ${shoveler.title}]`,
+                            'Shoveler Carousel',
+                            shoveler.title,
+                            shoveler.carouselIndex.toString()
+                        ]);
                     });
                 }
             });
+        } else {
+            // Add headers even if no data
+            shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
         }
         
-        // Create CSV content with enhanced headers
-        const header = ['ASIN', 'Name', 'Section', 'Type', 'ShovelerTitle', 'ShovelerIndex'];
-        const csvContent = [header.join(',')].concat(
-            csvRows.map(row => header.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(','))
-        ).join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const shovelerSheet = XLSX.utils.aoa_to_sheet(shovelerData);
+        XLSX.utils.book_append_sheet(workbook, shovelerSheet, 'Shoveler Data');
+        
+        // Generate and download the file
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'wholefoods_comprehensive_data.csv';
+        a.download = 'wholefoods_data_separated.xlsx';
         a.click();
         URL.revokeObjectURL(url);
         
-        console.log(`✅ CSV export complete: ${csvRows.length} total rows`);
-        console.log(`📊 Export summary: ${combinedData.totalVisibleASINs} visible ASINs, ${combinedData.totalShovelerASINs} shoveler ASINs from ${combinedData.totalShovelers} shovelers`);
+        console.log(`✅ XLSX export complete with separate sheets`);
+        console.log(`📊 Export summary: ${combinedData.totalVisibleASINs} visible ASINs (Visible Cards sheet), ${combinedData.totalShovelerASINs} shoveler ASINs (Shoveler Data sheet)`);
     }
 
     function createExportButton() {
@@ -1734,7 +1981,7 @@
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
                 `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
                 `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
-                `Total ASINs: ${comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs}`;
+                `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
             
             alert(summary);
             
@@ -1745,7 +1992,7 @@
             
             // Store for future use and export
             lastExtractedData = comprehensiveData;
-            downloadCSV(comprehensiveData);
+            downloadXLSX(comprehensiveData);
         });
 
         const refreshBtn = document.createElement('button');
@@ -1772,7 +2019,7 @@
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
                 `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
                 `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
-                `Total ASINs: ${comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs}`;
+                `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
             
             alert(summary);
             
@@ -1816,10 +2063,8 @@
         function fetchSharePointData() {
             console.log('🌐 Fetching data from SharePoint...');
 
-            // Show loading feedback
-            const originalButtonText = refreshDataBtn.textContent;
-            refreshDataBtn.textContent = '🔄 Fetching...';
-            refreshDataBtn.disabled = true;
+            // Show loading feedback - function still exists for potential future use
+            console.log('🔄 Fetching SharePoint data...');
 
             GM_xmlhttpRequest({
                 method: 'GET',
@@ -1845,17 +2090,15 @@
                         alert(`❌ Failed to fetch data from SharePoint.\n\nStatus: ${response.status}\nCheck console for details.`);
                     }
 
-                    // Restore button state
-                    refreshDataBtn.textContent = originalButtonText;
-                    refreshDataBtn.disabled = false;
+                    // SharePoint fetch complete
+                    console.log('📡 SharePoint fetch completed');
                 },
                 onerror: function(error) {
                     console.error('❌ Error accessing SharePoint:', error);
                     alert('❌ Error accessing SharePoint data.\n\nThis might be due to:\n- Network connectivity issues\n- Authentication problems\n- SharePoint access restrictions\n\nCheck console for details.');
 
-                    // Restore button state
-                    refreshDataBtn.textContent = originalButtonText;
-                    refreshDataBtn.disabled = false;
+                    // SharePoint fetch error handled
+                    console.log('❌ SharePoint fetch error handled');
                 }
             });
         }
@@ -1928,17 +2171,7 @@
             }
         }
 
-        // Create SharePoint data refresh button
-        const refreshDataBtn = document.createElement('button');
-        refreshDataBtn.textContent = '🔄 Refresh Data from SharePoint';
-        refreshDataBtn.style.padding = '10px';
-        refreshDataBtn.style.backgroundColor = '#20c997';
-        refreshDataBtn.style.color = '#fff';
-        refreshDataBtn.style.border = 'none';
-        refreshDataBtn.style.borderRadius = '5px';
-        refreshDataBtn.style.cursor = 'pointer';
-
-        refreshDataBtn.addEventListener('click', fetchSharePointData);
+        // SharePoint data refresh button - REMOVED per user request
 
         // Create store switching dropdown
         const storeSelectContainer = document.createElement('div');
@@ -2145,6 +2378,28 @@
 
         csrfSettingsBtn.addEventListener('click', showCSRFSettings);
 
+        // Version check button
+        const versionCheckBtn = document.createElement('button');
+        versionCheckBtn.textContent = '🔍 Check for Updates';
+        versionCheckBtn.style.padding = '8px';
+        versionCheckBtn.style.backgroundColor = '#17a2b8';
+        versionCheckBtn.style.color = '#fff';
+        versionCheckBtn.style.border = 'none';
+        versionCheckBtn.style.borderRadius = '4px';
+        versionCheckBtn.style.cursor = 'pointer';
+        versionCheckBtn.style.fontSize = '12px';
+        versionCheckBtn.style.marginTop = '4px';
+
+        versionCheckBtn.addEventListener('click', () => {
+            versionCheckBtn.textContent = '🔄 Checking...';
+            versionCheckBtn.disabled = true;
+            
+            checkForUpdates(true).finally(() => {
+                versionCheckBtn.textContent = '🔍 Check for Updates';
+                versionCheckBtn.disabled = false;
+            });
+        });
+
         // Debug info button for troubleshooting
         const debugBtn = document.createElement('button');
         debugBtn.textContent = '🐛 Debug Info';
@@ -2183,41 +2438,7 @@
             alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
         });
 
-        // Create IndexedDB reset button
-        const resetDbBtn = document.createElement('button');
-        resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
-        resetDbBtn.style.padding = '8px';
-        resetDbBtn.style.backgroundColor = '#dc3545';
-        resetDbBtn.style.color = '#fff';
-        resetDbBtn.style.border = 'none';
-        resetDbBtn.style.borderRadius = '4px';
-        resetDbBtn.style.cursor = 'pointer';
-        resetDbBtn.style.fontSize = '12px';
-        resetDbBtn.style.marginTop = '4px';
-
-        resetDbBtn.addEventListener('click', async () => {
-            if (!confirm('Delete the saved item database?\n\nThis will clear all items from IndexedDB. You can reload data from SharePoint afterwards.')) return;
-            
-            try {
-                resetDbBtn.textContent = '🔄 Clearing...';
-                resetDbBtn.disabled = true;
-                
-                await db.delete(); // drops database
-                await db.open();   // recreate schema
-                
-                // Clear timestamp
-                GM_deleteValue('itemDatabaseTimestamp');
-                
-                await updateItemDatabaseStatus();
-                alert('✅ Item DB cleared successfully');
-            } catch (error) {
-                console.error('❌ Error clearing IndexedDB:', error);
-                alert(`❌ Error clearing database: ${error.message}`);
-            } finally {
-                resetDbBtn.textContent = '🧹 Reset Item DB (IndexedDB)';
-                resetDbBtn.disabled = false;
-            }
-        });
+        // Reset Item DB button - REMOVED per user request
 
         // Function to update store dropdown options
         const updateStoreDropdown = () => {
@@ -2677,12 +2898,11 @@
         contentContainer.appendChild(itemSearchContainer);
 
         contentContainer.appendChild(uploadBtn);
-        contentContainer.appendChild(refreshDataBtn);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(csrfSettingsBtn);
+        contentContainer.appendChild(versionCheckBtn);
         contentContainer.appendChild(debugBtn);
-        contentContainer.appendChild(resetDbBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
@@ -2810,6 +3030,10 @@
             clearInterval(urlPollingInterval);
             urlPollingInterval = null;
         }
+        if (versionCheckInterval) {
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
+        }
 
         // Reset state
         wtsPanel = null;
@@ -2843,8 +3067,8 @@
                         if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
                             // Use comprehensive data extraction for counter
                             const comprehensiveData = extractAllData();
-                            const totalASINs = comprehensiveData.totalVisibleASINs + comprehensiveData.totalShovelerASINs;
-                            counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${totalASINs} | Empty: ${comprehensiveData.emptyCards}`;
+                            // Total now only counts visible cards, not shovelers
+                            counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards}`;
                         } else {
                             console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                             if (cardCounterInterval) {
@@ -2995,6 +3219,10 @@
                     if (urlPollingInterval) {
                         clearInterval(urlPollingInterval);
                         urlPollingInterval = null;
+                    }
+                    if (versionCheckInterval) {
+                        clearInterval(versionCheckInterval);
+                        versionCheckInterval = null;
                     }
                 }
             } catch (error) {
