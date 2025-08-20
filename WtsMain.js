@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.013
+// @version      1.3.014
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1846,8 +1846,9 @@
         // SharePoint data refresh functionality is now handled above
         // Old XLSX upload functionality has been replaced with SharePoint integration
 
-        // Load saved panel position or use default
+        // Load saved panel position and state
         const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
+        const isMinimized = GM_getValue('wts_panel_minimized', false);
 
         const panel = document.createElement('div');
         panel.id = 'wts-panel';
@@ -1855,77 +1856,138 @@
         panel.style.top = savedPosition.y + 'px';
         panel.style.left = savedPosition.x + 'px';
         panel.style.zIndex = '2147483647';
-        panel.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        panel.style.border = 'none';
-        panel.style.borderRadius = '16px';
-        panel.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.1)';
-        panel.style.padding = '0';
-        panel.style.display = 'flex';
-        panel.style.flexDirection = 'column';
-        panel.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-        panel.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        panel.style.background = '#ffffff';
+        panel.style.border = '1px solid #dee2e6';
+        panel.style.borderRadius = '8px';
+        panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        panel.style.fontFamily = 'system-ui, -apple-system, sans-serif';
         panel.style.userSelect = 'none';
-        panel.style.backdropFilter = 'blur(10px)';
-        panel.style.minWidth = '280px';
-        panel.style.maxWidth = '320px';
+        panel.style.transition = 'all 0.3s ease';
+        
+        // Set initial size based on minimized state
+        if (isMinimized) {
+            panel.style.width = '120px';
+            panel.style.height = '40px';
+            panel.style.padding = '0';
+        } else {
+            panel.style.minWidth = '280px';
+            panel.style.maxWidth = '320px';
+            panel.style.padding = '0';
+            panel.style.display = 'flex';
+            panel.style.flexDirection = 'column';
+        }
 
         // Create drag handle header
         const dragHeader = document.createElement('div');
         dragHeader.style.display = 'flex';
         dragHeader.style.alignItems = 'center';
         dragHeader.style.justifyContent = 'space-between';
-        dragHeader.style.padding = '16px 20px';
-        dragHeader.style.background = 'rgba(255, 255, 255, 0.15)';
-        dragHeader.style.borderRadius = '16px 16px 0 0';
+        dragHeader.style.padding = '12px 16px';
+        dragHeader.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+        dragHeader.style.borderRadius = '8px 8px 0 0';
         dragHeader.style.cursor = 'move';
-        dragHeader.style.borderBottom = '1px solid rgba(255, 255, 255, 0.1)';
-        dragHeader.style.fontSize = '16px';
+        dragHeader.style.fontSize = '14px';
         dragHeader.style.fontWeight = '600';
         dragHeader.style.color = '#ffffff';
-        dragHeader.style.backdropFilter = 'blur(10px)';
-        dragHeader.style.transition = 'all 0.2s ease';
+        dragHeader.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
 
         const headerLeft = document.createElement('div');
         headerLeft.style.display = 'flex';
         headerLeft.style.alignItems = 'center';
+        headerLeft.style.gap = '8px';
 
         const dragIcon = document.createElement('span');
         dragIcon.textContent = '⋮⋮';
-        dragIcon.style.marginRight = '12px';
-        dragIcon.style.fontSize = '18px';
-        dragIcon.style.color = 'rgba(255, 255, 255, 0.8)';
+        dragIcon.style.fontSize = '12px';
+        dragIcon.style.color = 'rgba(255,255,255,0.8)';
         dragIcon.style.transform = 'rotate(90deg)';
-        dragIcon.style.transition = 'all 0.2s ease';
 
         const headerTitle = document.createElement('span');
         headerTitle.textContent = 'WTS Tools';
-        headerTitle.style.fontSize = '16px';
+        headerTitle.style.fontSize = '14px';
         headerTitle.style.fontWeight = '600';
-        headerTitle.style.letterSpacing = '0.5px';
+
+        const headerRight = document.createElement('div');
+        headerRight.style.display = 'flex';
+        headerRight.style.alignItems = 'center';
+        headerRight.style.gap = '8px';
 
         const versionBadge = document.createElement('span');
-        versionBadge.textContent = 'v1.3.013';
-        versionBadge.style.fontSize = '11px';
-        versionBadge.style.padding = '2px 8px';
-        versionBadge.style.background = 'rgba(255, 255, 255, 0.2)';
+        versionBadge.textContent = 'v1.3.014';
+        versionBadge.style.fontSize = '10px';
+        versionBadge.style.padding = '3px 8px';
+        versionBadge.style.background = 'rgba(255,255,255,0.2)';
         versionBadge.style.borderRadius = '12px';
-        versionBadge.style.color = 'rgba(255, 255, 255, 0.9)';
+        versionBadge.style.color = '#ffffff';
         versionBadge.style.fontWeight = '500';
+
+        // Create minimize/maximize button
+        const minimizeBtn = document.createElement('button');
+        minimizeBtn.textContent = isMinimized ? '📋' : '➖';
+        minimizeBtn.style.background = 'rgba(255,255,255,0.2)';
+        minimizeBtn.style.border = 'none';
+        minimizeBtn.style.borderRadius = '4px';
+        minimizeBtn.style.color = '#ffffff';
+        minimizeBtn.style.cursor = 'pointer';
+        minimizeBtn.style.padding = '4px 8px';
+        minimizeBtn.style.fontSize = '12px';
+        minimizeBtn.style.transition = 'all 0.2s ease';
+        minimizeBtn.title = isMinimized ? 'Expand Panel' : 'Minimize Panel';
+
+        minimizeBtn.addEventListener('mouseenter', () => {
+            minimizeBtn.style.background = 'rgba(255,255,255,0.3)';
+        });
+        minimizeBtn.addEventListener('mouseleave', () => {
+            minimizeBtn.style.background = 'rgba(255,255,255,0.2)';
+        });
 
         headerLeft.appendChild(dragIcon);
         headerLeft.appendChild(headerTitle);
+        headerRight.appendChild(versionBadge);
+        headerRight.appendChild(minimizeBtn);
         dragHeader.appendChild(headerLeft);
-        dragHeader.appendChild(versionBadge);
+        dragHeader.appendChild(headerRight);
 
         // Create content container
         const contentContainer = document.createElement('div');
-        contentContainer.style.padding = '20px';
-        contentContainer.style.display = 'flex';
+        contentContainer.style.padding = '16px';
+        contentContainer.style.display = isMinimized ? 'none' : 'flex';
         contentContainer.style.flexDirection = 'column';
         contentContainer.style.gap = '12px';
-        contentContainer.style.background = 'rgba(255, 255, 255, 0.95)';
-        contentContainer.style.borderRadius = '0 0 16px 16px';
-        contentContainer.style.backdropFilter = 'blur(10px)';
+        contentContainer.style.background = '#ffffff';
+        contentContainer.style.borderRadius = '0 0 8px 8px';
+
+        // Minimize/Maximize functionality
+        const toggleMinimize = () => {
+            const currentlyMinimized = contentContainer.style.display === 'none';
+            
+            if (currentlyMinimized) {
+                // Expand
+                contentContainer.style.display = 'flex';
+                panel.style.width = '';
+                panel.style.height = '';
+                panel.style.minWidth = '280px';
+                panel.style.maxWidth = '320px';
+                minimizeBtn.textContent = '➖';
+                minimizeBtn.title = 'Minimize Panel';
+                GM_setValue('wts_panel_minimized', false);
+            } else {
+                // Minimize
+                contentContainer.style.display = 'none';
+                panel.style.width = '120px';
+                panel.style.height = '40px';
+                panel.style.minWidth = '';
+                panel.style.maxWidth = '';
+                minimizeBtn.textContent = '📋';
+                minimizeBtn.title = 'Expand Panel';
+                GM_setValue('wts_panel_minimized', true);
+            }
+        };
+
+        minimizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleMinimize();
+        });
 
         // Drag functionality variables
         let isDragging = false;
@@ -1933,17 +1995,17 @@
 
         // Drag event handlers
         const handleMouseDown = (e) => {
+            // Don't start drag if clicking on minimize button
+            if (e.target === minimizeBtn) return;
+            
             isDragging = true;
             const rect = panel.getBoundingClientRect();
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
 
-            // Enhanced visual feedback
-            panel.style.boxShadow = '0 25px 50px rgba(0,0,0,0.25), 0 12px 24px rgba(0,0,0,0.15)';
-            panel.style.transform = 'scale(1.05) rotate(1deg)';
-            dragHeader.style.background = 'rgba(255, 255, 255, 0.25)';
-            dragIcon.style.color = '#ffffff';
-            dragIcon.style.transform = 'rotate(90deg) scale(1.2)';
+            // Subtle visual feedback
+            panel.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
+            panel.style.transform = 'scale(1.02)';
             document.body.style.cursor = 'grabbing';
 
             e.preventDefault();
@@ -1980,12 +2042,9 @@
             const position = { x: rect.left, y: rect.top };
             GM_setValue('wts_panel_position', position);
 
-            // Reset visual feedback with smooth transition
-            panel.style.boxShadow = '0 20px 40px rgba(0,0,0,0.15), 0 8px 16px rgba(0,0,0,0.1)';
-            panel.style.transform = 'scale(1) rotate(0deg)';
-            dragHeader.style.background = 'rgba(255, 255, 255, 0.15)';
-            dragIcon.style.color = 'rgba(255, 255, 255, 0.8)';
-            dragIcon.style.transform = 'rotate(90deg) scale(1)';
+            // Reset visual feedback
+            panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            panel.style.transform = 'scale(1)';
             document.body.style.cursor = '';
         };
 
@@ -2024,42 +2083,75 @@
         panel.appendChild(dragHeader);
         panel.appendChild(contentContainer);
 
-        const exportBtn = document.createElement('button');
-        exportBtn.textContent = '📦 Export ASIN Data';
-        exportBtn.style.padding = '14px 20px';
-        exportBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-        exportBtn.style.color = '#fff';
-        exportBtn.style.border = 'none';
-        exportBtn.style.borderRadius = '12px';
-        exportBtn.style.cursor = 'pointer';
-        exportBtn.style.fontSize = '14px';
-        exportBtn.style.fontWeight = '600';
-        exportBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        exportBtn.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.3)';
-        exportBtn.style.letterSpacing = '0.5px';
-        exportBtn.style.position = 'relative';
-        exportBtn.style.overflow = 'hidden';
-        
-        // Add hover effects
-        exportBtn.addEventListener('mouseenter', () => {
-            exportBtn.style.transform = 'translateY(-2px)';
-            exportBtn.style.boxShadow = '0 8px 20px rgba(40, 167, 69, 0.4)';
-            exportBtn.style.background = 'linear-gradient(135deg, #218838 0%, #1ea085 100%)';
-        });
-        
-        exportBtn.addEventListener('mouseleave', () => {
-            exportBtn.style.transform = 'translateY(0)';
-            exportBtn.style.boxShadow = '0 4px 12px rgba(40, 167, 69, 0.3)';
-            exportBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-        });
+        // Helper function to create professional buttons
+        const createButton = (text, color, onClick, options = {}) => {
+            const btn = document.createElement('button');
+            btn.textContent = text;
+            btn.style.padding = '10px 16px';
+            btn.style.background = color;
+            btn.style.color = '#ffffff';
+            btn.style.border = 'none';
+            btn.style.borderRadius = '6px';
+            btn.style.cursor = 'pointer';
+            btn.style.fontSize = '13px';
+            btn.style.fontWeight = '500';
+            btn.style.transition = 'all 0.2s ease';
+            btn.style.width = options.fullWidth ? '100%' : 'auto';
+            btn.style.textAlign = 'center';
+            
+            // Hover effects
+            btn.addEventListener('mouseenter', () => {
+                btn.style.transform = 'translateY(-1px)';
+                btn.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                btn.style.filter = 'brightness(1.1)';
+            });
+            
+            btn.addEventListener('mouseleave', () => {
+                btn.style.transform = 'translateY(0)';
+                btn.style.boxShadow = 'none';
+                btn.style.filter = 'brightness(1)';
+            });
+            
+            btn.addEventListener('click', onClick);
+            return btn;
+        };
 
-        exportBtn.addEventListener('click', () => {
+        // Helper function to create section headers
+        const createSectionHeader = (title) => {
+            const header = document.createElement('div');
+            header.textContent = title;
+            header.style.fontSize = '12px';
+            header.style.fontWeight = '600';
+            header.style.color = '#6c757d';
+            header.style.textTransform = 'uppercase';
+            header.style.letterSpacing = '0.5px';
+            header.style.marginTop = '16px';
+            header.style.marginBottom = '8px';
+            header.style.paddingBottom = '4px';
+            header.style.borderBottom = '1px solid #e9ecef';
+            return header;
+        };
+
+        // Helper function to create button groups
+        const createButtonGroup = (buttons, columns = 1) => {
+            const group = document.createElement('div');
+            group.style.display = 'grid';
+            group.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+            group.style.gap = '8px';
+            group.style.marginBottom = '8px';
+            
+            buttons.forEach(btn => group.appendChild(btn));
+            return group;
+        };
+
+        // PRIMARY ACTIONS SECTION
+        const primaryHeader = createSectionHeader('Primary Actions');
+        
+        const exportBtn = createButton('📦 Export Data', '#28a745', () => {
             console.log('📦 Export button clicked - using comprehensive data extraction');
             
-            // Use comprehensive data extraction
             const comprehensiveData = extractAllData();
             
-            // Show summary of what was found
             const summary = `📊 Data Extraction Complete!\n\n` +
                 `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
@@ -2074,48 +2166,16 @@
                 return;
             }
             
-            // Store for future use and export
             lastExtractedData = comprehensiveData;
             downloadXLSX(comprehensiveData);
-        });
+        }, { fullWidth: true });
 
-        const refreshBtn = document.createElement('button');
-        refreshBtn.textContent = '🔄 Refresh Data';
-        refreshBtn.style.padding = '14px 20px';
-        refreshBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)';
-        refreshBtn.style.color = '#fff';
-        refreshBtn.style.border = 'none';
-        refreshBtn.style.borderRadius = '12px';
-        refreshBtn.style.cursor = 'pointer';
-        refreshBtn.style.fontSize = '14px';
-        refreshBtn.style.fontWeight = '600';
-        refreshBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        refreshBtn.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
-        refreshBtn.style.letterSpacing = '0.5px';
-        
-        // Add hover effects
-        refreshBtn.addEventListener('mouseenter', () => {
-            refreshBtn.style.transform = 'translateY(-2px)';
-            refreshBtn.style.boxShadow = '0 8px 20px rgba(0, 123, 255, 0.4)';
-            refreshBtn.style.background = 'linear-gradient(135deg, #0056b3 0%, #520dc2 100%)';
-        });
-        
-        refreshBtn.addEventListener('mouseleave', () => {
-            refreshBtn.style.transform = 'translateY(0)';
-            refreshBtn.style.boxShadow = '0 4px 12px rgba(0, 123, 255, 0.3)';
-            refreshBtn.style.background = 'linear-gradient(135deg, #007bff 0%, #6610f2 100%)';
-        });
-
-        const refreshData = () => {
+        const refreshBtn = createButton('🔄 Refresh Data', '#007bff', () => {
             console.log('🔄 Refresh button clicked - using comprehensive data extraction');
             
-            // Clear previous data
             lastExtractedData = [];
-            
-            // Use comprehensive data extraction
             const comprehensiveData = extractAllData();
             
-            // Show summary of what was found
             const summary = `🔄 Data Refresh Complete!\n\n` +
                 `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
@@ -2124,39 +2184,31 @@
                 `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
             
             alert(summary);
-            
-            // Store for future use
             lastExtractedData = comprehensiveData;
-        };
+        }, { fullWidth: true });
 
-        refreshBtn.addEventListener('click', refreshData);
+        const primaryGroup = createButtonGroup([exportBtn, refreshBtn]);
 
-        // Create CSV file upload button and input
-        const uploadBtn = document.createElement('button');
-        uploadBtn.textContent = '📁 Upload Store Mapping (CSV)';
-        uploadBtn.style.padding = '14px 20px';
-        uploadBtn.style.background = 'linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%)';
-        uploadBtn.style.color = '#fff';
-        uploadBtn.style.border = 'none';
-        uploadBtn.style.borderRadius = '12px';
-        uploadBtn.style.cursor = 'pointer';
-        uploadBtn.style.fontSize = '14px';
-        uploadBtn.style.fontWeight = '600';
-        uploadBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        uploadBtn.style.boxShadow = '0 4px 12px rgba(111, 66, 193, 0.3)';
-        uploadBtn.style.letterSpacing = '0.5px';
+        // TOOLS SECTION
+        const toolsHeader = createSectionHeader('Tools');
         
-        // Add hover effects
-        uploadBtn.addEventListener('mouseenter', () => {
-            uploadBtn.style.transform = 'translateY(-2px)';
-            uploadBtn.style.boxShadow = '0 8px 20px rgba(111, 66, 193, 0.4)';
-            uploadBtn.style.background = 'linear-gradient(135deg, #5a2d91 0%, #c73650 100%)';
+        const uploadBtn = createButton('📁 Upload CSV', '#6f42c1', () => {
+            fileInput.click();
         });
-        
-        uploadBtn.addEventListener('mouseleave', () => {
-            uploadBtn.style.transform = 'translateY(0)';
-            uploadBtn.style.boxShadow = '0 4px 12px rgba(111, 66, 193, 0.3)';
-            uploadBtn.style.background = 'linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%)';
+
+        const versionCheckBtn = createButton('🔍 Updates', '#17a2b8', async () => {
+            versionCheckBtn.textContent = '🔄 Checking...';
+            versionCheckBtn.disabled = true;
+            
+            try {
+                await checkForUpdates(true);
+            } catch (error) {
+                console.error('❌ Error in version check button:', error);
+                alert(`❌ Version check failed: ${error.message}`);
+            } finally {
+                versionCheckBtn.textContent = '🔍 Updates';
+                versionCheckBtn.disabled = false;
+            }
         });
 
         const fileInput = document.createElement('input');
@@ -2164,18 +2216,15 @@
         fileInput.accept = '.csv';
         fileInput.style.display = 'none';
 
-        uploadBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
-
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
                 handleCSVUpload(file);
             }
-            // Reset the input so the same file can be selected again
             fileInput.value = '';
         });
+
+        const toolsGroup = createButtonGroup([uploadBtn, versionCheckBtn], 2);
 
         // SharePoint data refresh functionality
         const sharePointUrl = 'https://share.amazon.com/sites/WFM_eComm_ABI/_layouts/15/download.aspx?SourceUrl=%2Fsites%2FWFM%5FeComm%5FABI%2FShared%20Documents%2FWFMOAC%2FDailyInventory%2FWFMOAC%20Inventory%20Data%2Exlsx';
@@ -2526,48 +2575,7 @@
 
         csrfSettingsBtn.addEventListener('click', showCSRFSettings);
 
-        // Version check button
-        const versionCheckBtn = document.createElement('button');
-        versionCheckBtn.textContent = '🔍 Check for Updates';
-        versionCheckBtn.style.padding = '10px 16px';
-        versionCheckBtn.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
-        versionCheckBtn.style.color = '#fff';
-        versionCheckBtn.style.border = 'none';
-        versionCheckBtn.style.borderRadius = '8px';
-        versionCheckBtn.style.cursor = 'pointer';
-        versionCheckBtn.style.fontSize = '13px';
-        versionCheckBtn.style.fontWeight = '500';
-        versionCheckBtn.style.marginTop = '4px';
-        versionCheckBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        versionCheckBtn.style.boxShadow = '0 2px 8px rgba(23, 162, 184, 0.2)';
-        
-        // Add hover effects
-        versionCheckBtn.addEventListener('mouseenter', () => {
-            versionCheckBtn.style.transform = 'translateY(-1px)';
-            versionCheckBtn.style.boxShadow = '0 4px 12px rgba(23, 162, 184, 0.3)';
-            versionCheckBtn.style.background = 'linear-gradient(135deg, #138496 0%, #0f6674 100%)';
-        });
-        
-        versionCheckBtn.addEventListener('mouseleave', () => {
-            versionCheckBtn.style.transform = 'translateY(0)';
-            versionCheckBtn.style.boxShadow = '0 2px 8px rgba(23, 162, 184, 0.2)';
-            versionCheckBtn.style.background = 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)';
-        });
-
-        versionCheckBtn.addEventListener('click', async () => {
-            versionCheckBtn.textContent = '🔄 Checking...';
-            versionCheckBtn.disabled = true;
-            
-            try {
-                await checkForUpdates(true);
-            } catch (error) {
-                console.error('❌ Error in version check button:', error);
-                alert(`❌ Version check failed: ${error.message}`);
-            } finally {
-                versionCheckBtn.textContent = '🔍 Check for Updates';
-                versionCheckBtn.disabled = false;
-            }
-        });
+        // Version check button - removed duplicate declaration, using the one from tools section
 
         // Debug info button for troubleshooting
         const debugBtn = document.createElement('button');
