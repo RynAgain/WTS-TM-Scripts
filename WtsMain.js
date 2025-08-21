@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.014
+// @version      1.3.015
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1846,23 +1846,21 @@
         // SharePoint data refresh functionality is now handled above
         // Old XLSX upload functionality has been replaced with SharePoint integration
 
-        // Load saved panel position and state
-        const savedPosition = GM_getValue('wts_panel_position', { x: 10, y: 10 });
+        // Fixed panel position (top-right corner)
         const isMinimized = GM_getValue('wts_panel_minimized', false);
 
         const panel = document.createElement('div');
         panel.id = 'wts-panel';
         panel.style.position = 'fixed';
-        panel.style.top = savedPosition.y + 'px';
-        panel.style.left = savedPosition.x + 'px';
+        panel.style.top = '20px';
+        panel.style.right = '20px';
         panel.style.zIndex = '2147483647';
         panel.style.background = '#ffffff';
-        panel.style.border = '1px solid #dee2e6';
-        panel.style.borderRadius = '8px';
-        panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-        panel.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+        panel.style.border = '2px solid #00704A';
+        panel.style.borderRadius = '12px';
+        panel.style.boxShadow = '0 8px 24px rgba(0, 112, 74, 0.15)';
+        panel.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         panel.style.userSelect = 'none';
-        panel.style.transition = 'all 0.3s ease';
         
         // Set initial size based on minimized state
         if (isMinimized) {
@@ -1877,35 +1875,33 @@
             panel.style.flexDirection = 'column';
         }
 
-        // Create drag handle header
-        const dragHeader = document.createElement('div');
-        dragHeader.style.display = 'flex';
-        dragHeader.style.alignItems = 'center';
-        dragHeader.style.justifyContent = 'space-between';
-        dragHeader.style.padding = '12px 16px';
-        dragHeader.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-        dragHeader.style.borderRadius = '8px 8px 0 0';
-        dragHeader.style.cursor = 'move';
-        dragHeader.style.fontSize = '14px';
-        dragHeader.style.fontWeight = '600';
-        dragHeader.style.color = '#ffffff';
-        dragHeader.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
+        // Create professional header
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.alignItems = 'center';
+        header.style.justifyContent = 'space-between';
+        header.style.padding = '16px 20px';
+        header.style.background = 'linear-gradient(135deg, #00704A 0%, #005A3C 100%)';
+        header.style.borderRadius = '10px 10px 0 0';
+        header.style.fontSize = '16px';
+        header.style.fontWeight = '600';
+        header.style.color = '#ffffff';
+        header.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
 
         const headerLeft = document.createElement('div');
         headerLeft.style.display = 'flex';
         headerLeft.style.alignItems = 'center';
-        headerLeft.style.gap = '8px';
+        headerLeft.style.gap = '12px';
 
-        const dragIcon = document.createElement('span');
-        dragIcon.textContent = '⋮⋮';
-        dragIcon.style.fontSize = '12px';
-        dragIcon.style.color = 'rgba(255,255,255,0.8)';
-        dragIcon.style.transform = 'rotate(90deg)';
+        const brandIcon = document.createElement('span');
+        brandIcon.textContent = '🛒';
+        brandIcon.style.fontSize = '18px';
 
         const headerTitle = document.createElement('span');
         headerTitle.textContent = 'WTS Tools';
-        headerTitle.style.fontSize = '14px';
+        headerTitle.style.fontSize = '16px';
         headerTitle.style.fontWeight = '600';
+        headerTitle.style.letterSpacing = '0.5px';
 
         const headerRight = document.createElement('div');
         headerRight.style.display = 'flex';
@@ -1914,48 +1910,49 @@
 
         const versionBadge = document.createElement('span');
         versionBadge.textContent = 'v1.3.014';
-        versionBadge.style.fontSize = '10px';
-        versionBadge.style.padding = '3px 8px';
-        versionBadge.style.background = 'rgba(255,255,255,0.2)';
-        versionBadge.style.borderRadius = '12px';
+        versionBadge.style.fontSize = '11px';
+        versionBadge.style.padding = '4px 10px';
+        versionBadge.style.background = 'rgba(255,255,255,0.15)';
+        versionBadge.style.borderRadius = '16px';
         versionBadge.style.color = '#ffffff';
         versionBadge.style.fontWeight = '500';
+        versionBadge.style.border = '1px solid rgba(255,255,255,0.2)';
 
         // Create minimize/maximize button
         const minimizeBtn = document.createElement('button');
         minimizeBtn.textContent = isMinimized ? '📋' : '➖';
-        minimizeBtn.style.background = 'rgba(255,255,255,0.2)';
-        minimizeBtn.style.border = 'none';
-        minimizeBtn.style.borderRadius = '4px';
+        minimizeBtn.style.background = 'rgba(255,255,255,0.15)';
+        minimizeBtn.style.border = '1px solid rgba(255,255,255,0.2)';
+        minimizeBtn.style.borderRadius = '6px';
         minimizeBtn.style.color = '#ffffff';
         minimizeBtn.style.cursor = 'pointer';
-        minimizeBtn.style.padding = '4px 8px';
+        minimizeBtn.style.padding = '6px 10px';
         minimizeBtn.style.fontSize = '12px';
-        minimizeBtn.style.transition = 'all 0.2s ease';
+        minimizeBtn.style.fontWeight = '500';
         minimizeBtn.title = isMinimized ? 'Expand Panel' : 'Minimize Panel';
 
         minimizeBtn.addEventListener('mouseenter', () => {
-            minimizeBtn.style.background = 'rgba(255,255,255,0.3)';
+            minimizeBtn.style.background = 'rgba(255,255,255,0.25)';
         });
         minimizeBtn.addEventListener('mouseleave', () => {
-            minimizeBtn.style.background = 'rgba(255,255,255,0.2)';
+            minimizeBtn.style.background = 'rgba(255,255,255,0.15)';
         });
 
-        headerLeft.appendChild(dragIcon);
+        headerLeft.appendChild(brandIcon);
         headerLeft.appendChild(headerTitle);
         headerRight.appendChild(versionBadge);
         headerRight.appendChild(minimizeBtn);
-        dragHeader.appendChild(headerLeft);
-        dragHeader.appendChild(headerRight);
+        header.appendChild(headerLeft);
+        header.appendChild(headerRight);
 
         // Create content container
         const contentContainer = document.createElement('div');
-        contentContainer.style.padding = '16px';
+        contentContainer.style.padding = '20px';
         contentContainer.style.display = isMinimized ? 'none' : 'flex';
         contentContainer.style.flexDirection = 'column';
-        contentContainer.style.gap = '12px';
+        contentContainer.style.gap = '16px';
         contentContainer.style.background = '#ffffff';
-        contentContainer.style.borderRadius = '0 0 8px 8px';
+        contentContainer.style.borderRadius = '0 0 10px 10px';
 
         // Minimize/Maximize functionality
         const toggleMinimize = () => {
@@ -1966,16 +1963,16 @@
                 contentContainer.style.display = 'flex';
                 panel.style.width = '';
                 panel.style.height = '';
-                panel.style.minWidth = '280px';
-                panel.style.maxWidth = '320px';
+                panel.style.minWidth = '320px';
+                panel.style.maxWidth = '360px';
                 minimizeBtn.textContent = '➖';
                 minimizeBtn.title = 'Minimize Panel';
                 GM_setValue('wts_panel_minimized', false);
             } else {
                 // Minimize
                 contentContainer.style.display = 'none';
-                panel.style.width = '120px';
-                panel.style.height = '40px';
+                panel.style.width = '140px';
+                panel.style.height = '50px';
                 panel.style.minWidth = '';
                 panel.style.maxWidth = '';
                 minimizeBtn.textContent = '📋';
@@ -1989,99 +1986,22 @@
             toggleMinimize();
         });
 
-        // Drag functionality variables
-        let isDragging = false;
-        let dragOffset = { x: 0, y: 0 };
-
-        // Drag event handlers
-        const handleMouseDown = (e) => {
-            // Don't start drag if clicking on minimize button
-            if (e.target === minimizeBtn) return;
-            
-            isDragging = true;
-            const rect = panel.getBoundingClientRect();
-            dragOffset.x = e.clientX - rect.left;
-            dragOffset.y = e.clientY - rect.top;
-
-            // Subtle visual feedback
-            panel.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)';
-            panel.style.transform = 'scale(1.02)';
-            document.body.style.cursor = 'grabbing';
-
-            e.preventDefault();
-        };
-
-        const handleMouseMove = (e) => {
-            if (!isDragging) return;
-
-            let newX = e.clientX - dragOffset.x;
-            let newY = e.clientY - dragOffset.y;
-
-            // Boundary constraints
-            const panelRect = panel.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            // Keep panel within viewport bounds
-            newX = Math.max(0, Math.min(newX, viewportWidth - panelRect.width));
-            newY = Math.max(0, Math.min(newY, viewportHeight - panelRect.height));
-
-            panel.style.left = newX + 'px';
-            panel.style.top = newY + 'px';
-
-            e.preventDefault();
-        };
-
-        const handleMouseUp = () => {
-            if (!isDragging) return;
-
-            isDragging = false;
-
-            // Save position
-            const rect = panel.getBoundingClientRect();
-            const position = { x: rect.left, y: rect.top };
-            GM_setValue('wts_panel_position', position);
-
-            // Reset visual feedback
-            panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-            panel.style.transform = 'scale(1)';
-            document.body.style.cursor = '';
-        };
-
-        // Add event listeners
-        dragHeader.addEventListener('mousedown', handleMouseDown);
-        document.addEventListener('mousemove', handleMouseMove);
-        document.addEventListener('mouseup', handleMouseUp);
-
-        // Handle window resize to keep panel in bounds
-        window.addEventListener('resize', () => {
-            const rect = panel.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            let newX = rect.left;
-            let newY = rect.top;
-
-            // Adjust position if panel is outside viewport
-            if (rect.right > viewportWidth) {
-                newX = viewportWidth - rect.width;
-            }
-            if (rect.bottom > viewportHeight) {
-                newY = viewportHeight - rect.height;
-            }
-
-            newX = Math.max(0, newX);
-            newY = Math.max(0, newY);
-
-            if (newX !== rect.left || newY !== rect.top) {
-                panel.style.left = newX + 'px';
-                panel.style.top = newY + 'px';
-                GM_setValue('wts_panel_position', { x: newX, y: newY });
-            }
-        });
-
-        panel.appendChild(dragHeader);
+        panel.appendChild(header);
         panel.appendChild(contentContainer);
+
+        // Helper function to adjust color brightness
+        const adjustBrightness = (color, factor) => {
+            // Simple brightness adjustment for hex colors
+            if (color.startsWith('#')) {
+                const hex = color.slice(1);
+                const num = parseInt(hex, 16);
+                const r = Math.min(255, Math.max(0, (num >> 16) + Math.round(factor * 255)));
+                const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + Math.round(factor * 255)));
+                const b = Math.min(255, Math.max(0, (num & 0x0000FF) + Math.round(factor * 255)));
+                return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+            }
+            return color;
+        };
 
         // Helper function to create professional buttons
         const createButton = (text, color, onClick, options = {}) => {
@@ -2099,17 +2019,13 @@
             btn.style.width = options.fullWidth ? '100%' : 'auto';
             btn.style.textAlign = 'center';
             
-            // Hover effects
+            // Professional hover effects (color only)
             btn.addEventListener('mouseenter', () => {
-                btn.style.transform = 'translateY(-1px)';
-                btn.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                btn.style.filter = 'brightness(1.1)';
+                btn.style.backgroundColor = adjustBrightness(color, 0.1);
             });
             
             btn.addEventListener('mouseleave', () => {
-                btn.style.transform = 'translateY(0)';
-                btn.style.boxShadow = 'none';
-                btn.style.filter = 'brightness(1)';
+                btn.style.backgroundColor = color;
             });
             
             btn.addEventListener('click', onClick);
@@ -2147,7 +2063,7 @@
         // PRIMARY ACTIONS SECTION
         const primaryHeader = createSectionHeader('Primary Actions');
         
-        const exportBtn = createButton('📦 Export Data', '#28a745', () => {
+        const exportBtn = createButton('📦 Export Data', '#00704A', () => {
             console.log('📦 Export button clicked - using comprehensive data extraction');
             
             const comprehensiveData = extractAllData();
@@ -2170,7 +2086,7 @@
             downloadXLSX(comprehensiveData);
         }, { fullWidth: true });
 
-        const refreshBtn = createButton('🔄 Refresh Data', '#007bff', () => {
+        const refreshBtn = createButton('🔄 Refresh Data', '#00704A', () => {
             console.log('🔄 Refresh button clicked - using comprehensive data extraction');
             
             lastExtractedData = [];
@@ -2192,11 +2108,11 @@
         // TOOLS SECTION
         const toolsHeader = createSectionHeader('Tools');
         
-        const uploadBtn = createButton('📁 Upload CSV', '#6f42c1', () => {
+        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
             fileInput.click();
         });
 
-        const versionCheckBtn = createButton('🔍 Updates', '#17a2b8', async () => {
+        const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
             versionCheckBtn.textContent = '🔄 Checking...';
             versionCheckBtn.disabled = true;
             
@@ -2364,7 +2280,7 @@
         switchBtn.textContent = '🔄 Switch Store';
         switchBtn.style.width = '100%';
         switchBtn.style.padding = '8px';
-        switchBtn.style.backgroundColor = '#17a2b8';
+        switchBtn.style.backgroundColor = '#00704A';
         switchBtn.style.color = '#fff';
         switchBtn.style.border = 'none';
         switchBtn.style.borderRadius = '4px';
@@ -2392,11 +2308,10 @@
         statusDiv.style.textAlign = 'center';
         statusDiv.style.marginTop = '8px';
         statusDiv.style.padding = '8px 12px';
-        statusDiv.style.background = 'rgba(108, 117, 125, 0.1)';
+        statusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
         statusDiv.style.borderRadius = '8px';
-        statusDiv.style.border = '1px solid rgba(108, 117, 125, 0.2)';
+        statusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
         statusDiv.style.fontWeight = '500';
-        statusDiv.style.transition = 'all 0.2s ease';
         statusDiv.textContent = 'No store mappings loaded';
 
         // Create status display for item database
@@ -2406,18 +2321,17 @@
         itemDatabaseStatusDiv.style.textAlign = 'center';
         itemDatabaseStatusDiv.style.marginTop = '8px';
         itemDatabaseStatusDiv.style.padding = '8px 12px';
-        itemDatabaseStatusDiv.style.background = 'rgba(108, 117, 125, 0.1)';
+        itemDatabaseStatusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
         itemDatabaseStatusDiv.style.borderRadius = '8px';
-        itemDatabaseStatusDiv.style.border = '1px solid rgba(108, 117, 125, 0.2)';
+        itemDatabaseStatusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
         itemDatabaseStatusDiv.style.fontWeight = '500';
-        itemDatabaseStatusDiv.style.transition = 'all 0.2s ease';
         itemDatabaseStatusDiv.textContent = 'No item database loaded';
 
         // Create CSRF settings button
         const csrfSettingsBtn = document.createElement('button');
         csrfSettingsBtn.textContent = '⚙️ CSRF Settings';
         csrfSettingsBtn.style.padding = '10px 16px';
-        csrfSettingsBtn.style.background = 'linear-gradient(135deg, #6c757d 0%, #495057 100%)';
+        csrfSettingsBtn.style.background = '#6c757d';
         csrfSettingsBtn.style.color = '#fff';
         csrfSettingsBtn.style.border = 'none';
         csrfSettingsBtn.style.borderRadius = '8px';
@@ -2425,20 +2339,15 @@
         csrfSettingsBtn.style.fontSize = '13px';
         csrfSettingsBtn.style.fontWeight = '500';
         csrfSettingsBtn.style.marginTop = '8px';
-        csrfSettingsBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        csrfSettingsBtn.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.2)';
+        csrfSettingsBtn.style.boxShadow = 'none';
         
-        // Add hover effects
+        // Professional hover effects (color only)
         csrfSettingsBtn.addEventListener('mouseenter', () => {
-            csrfSettingsBtn.style.transform = 'translateY(-1px)';
-            csrfSettingsBtn.style.boxShadow = '0 4px 12px rgba(108, 117, 125, 0.3)';
-            csrfSettingsBtn.style.background = 'linear-gradient(135deg, #5a6268 0%, #3d4043 100%)';
+            csrfSettingsBtn.style.background = '#5a6268';
         });
         
         csrfSettingsBtn.addEventListener('mouseleave', () => {
-            csrfSettingsBtn.style.transform = 'translateY(0)';
-            csrfSettingsBtn.style.boxShadow = '0 2px 8px rgba(108, 117, 125, 0.2)';
-            csrfSettingsBtn.style.background = 'linear-gradient(135deg, #6c757d 0%, #495057 100%)';
+            csrfSettingsBtn.style.background = '#6c757d';
         });
 
         // CSRF Settings Modal
@@ -2581,7 +2490,7 @@
         const debugBtn = document.createElement('button');
         debugBtn.textContent = '🐛 Debug Info';
         debugBtn.style.padding = '10px 16px';
-        debugBtn.style.background = 'linear-gradient(135deg, #e83e8c 0%, #dc3545 100%)';
+        debugBtn.style.background = '#e83e8c';
         debugBtn.style.color = '#fff';
         debugBtn.style.border = 'none';
         debugBtn.style.borderRadius = '8px';
@@ -2589,20 +2498,15 @@
         debugBtn.style.fontSize = '13px';
         debugBtn.style.fontWeight = '500';
         debugBtn.style.marginTop = '4px';
-        debugBtn.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
-        debugBtn.style.boxShadow = '0 2px 8px rgba(232, 62, 140, 0.2)';
+        debugBtn.style.boxShadow = 'none';
         
-        // Add hover effects
+        // Professional hover effects (color only)
         debugBtn.addEventListener('mouseenter', () => {
-            debugBtn.style.transform = 'translateY(-1px)';
-            debugBtn.style.boxShadow = '0 4px 12px rgba(232, 62, 140, 0.3)';
-            debugBtn.style.background = 'linear-gradient(135deg, #d91a72 0%, #c82333 100%)';
+            debugBtn.style.background = '#d91a72';
         });
         
         debugBtn.addEventListener('mouseleave', () => {
-            debugBtn.style.transform = 'translateY(0)';
-            debugBtn.style.boxShadow = '0 2px 8px rgba(232, 62, 140, 0.2)';
-            debugBtn.style.background = 'linear-gradient(135deg, #e83e8c 0%, #dc3545 100%)';
+            debugBtn.style.background = '#e83e8c';
         });
 
         debugBtn.addEventListener('click', async () => {
@@ -2656,7 +2560,7 @@
                 storeSelectContainer.style.display = 'none';
             } else {
                 statusDiv.textContent = `${storeMappingData.size} store mappings loaded`;
-                statusDiv.style.color = '#28a745';
+                statusDiv.style.color = '#00704A';
                 storeSelectContainer.style.display = 'block';
                 updateStoreDropdown();
             }
@@ -2677,7 +2581,7 @@
                 } else {
                     const ageText = status.ageHours < 1 ? `${Math.round(status.ageHours * 60)}m` : `${status.ageHours.toFixed(1)}h`;
                     itemDatabaseStatusDiv.textContent = `${status.count.toLocaleString()} items loaded (${ageText} ago)`;
-                    itemDatabaseStatusDiv.style.color = '#28a745';
+                    itemDatabaseStatusDiv.style.color = '#00704A';
                     // Only show search container if it exists
                     if (typeof itemSearchContainer !== 'undefined') {
                         itemSearchContainer.style.display = 'block';
@@ -2718,7 +2622,7 @@
         const goToItemBtn = document.createElement('button');
         goToItemBtn.textContent = '🔗 Go to Item';
         goToItemBtn.style.padding = '10px';
-        goToItemBtn.style.backgroundColor = '#fd7e14';
+        goToItemBtn.style.backgroundColor = '#00704A';
         goToItemBtn.style.color = '#fff';
         goToItemBtn.style.border = 'none';
         goToItemBtn.style.borderRadius = '5px';
@@ -2875,37 +2779,32 @@
         itemSearchInput.placeholder = 'Enter search term...';
         itemSearchInput.style.width = '100%';
         itemSearchInput.style.padding = '12px 16px';
-        itemSearchInput.style.border = '2px solid rgba(108, 117, 125, 0.2)';
-        itemSearchInput.style.borderRadius = '10px';
+        itemSearchInput.style.border = '2px solid #00704A';
+        itemSearchInput.style.borderRadius = '8px';
         itemSearchInput.style.fontSize = '14px';
         itemSearchInput.style.fontWeight = '500';
         itemSearchInput.style.boxSizing = 'border-box';
         itemSearchInput.style.marginBottom = '8px';
-        itemSearchInput.style.background = 'rgba(255, 255, 255, 0.9)';
-        itemSearchInput.style.transition = 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        itemSearchInput.style.background = '#ffffff';
         itemSearchInput.style.color = '#495057';
         
-        // Add focus effects
+        // Professional focus effects (no animations)
         itemSearchInput.addEventListener('focus', () => {
-            itemSearchInput.style.border = '2px solid #667eea';
-            itemSearchInput.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-            itemSearchInput.style.background = '#ffffff';
+            itemSearchInput.style.border = '2px solid #005A3C';
+            itemSearchInput.style.outline = 'none';
         });
         
         itemSearchInput.addEventListener('blur', () => {
-            itemSearchInput.style.border = '2px solid rgba(108, 117, 125, 0.2)';
-            itemSearchInput.style.boxShadow = 'none';
-            itemSearchInput.style.background = 'rgba(255, 255, 255, 0.9)';
+            itemSearchInput.style.border = '2px solid #00704A';
         });
 
         const searchResultsContainer = document.createElement('div');
         searchResultsContainer.style.maxHeight = '200px';
         searchResultsContainer.style.overflowY = 'auto';
-        searchResultsContainer.style.border = '2px solid rgba(108, 117, 125, 0.1)';
-        searchResultsContainer.style.borderRadius = '12px';
-        searchResultsContainer.style.background = 'rgba(255, 255, 255, 0.95)';
-        searchResultsContainer.style.backdropFilter = 'blur(10px)';
-        searchResultsContainer.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.1)';
+        searchResultsContainer.style.border = '1px solid #00704A';
+        searchResultsContainer.style.borderRadius = '8px';
+        searchResultsContainer.style.background = '#ffffff';
+        searchResultsContainer.style.boxShadow = '0 2px 8px rgba(0, 112, 74, 0.1)';
         searchResultsContainer.style.display = 'none';
         searchResultsContainer.style.marginTop = '8px';
 
@@ -2961,12 +2860,12 @@
                 // Highlight current store items
                 const isCurrentStore = currentStoreTLC && item.store_tlc === currentStoreTLC;
                 if (isCurrentStore) {
-                    resultItem.style.backgroundColor = '#e8f5e8';
-                    resultItem.style.borderLeft = '3px solid #28a745';
+                    resultItem.style.backgroundColor = '#f0f8f0';
+                    resultItem.style.borderLeft = '3px solid #00704A';
                 }
 
                 const storeIndicator = isCurrentStore ? '🏪 ' : '';
-                const storeColor = isCurrentStore ? '#28a745' : '#666';
+                const storeColor = isCurrentStore ? '#00704A' : '#666';
 
                 resultItem.innerHTML = `
                     <div style="font-weight: bold; color: #007bff;">${item.item_name}</div>
@@ -2982,7 +2881,7 @@
 
                 resultItem.addEventListener('mouseleave', () => {
                     if (isCurrentStore) {
-                        resultItem.style.backgroundColor = '#e8f5e8';
+                        resultItem.style.backgroundColor = '#f0f8f0';
                     } else {
                         resultItem.style.backgroundColor = 'transparent';
                     }
@@ -3049,7 +2948,7 @@
                         const tlc = getStoreTLCFromStoreId(storeInfo.storeId, storeMappingData);
                         if (tlc) {
                             currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (${tlc})`;
-                            currentStoreDisplayDiv.style.color = '#28a745';
+                            currentStoreDisplayDiv.style.color = '#00704A';
                         } else {
                             currentStoreDisplayDiv.textContent = `Current Store: ${storeInfo.displayName} (ID: ${storeInfo.storeId})`;
                             currentStoreDisplayDiv.style.color = '#ffc107';
@@ -3266,7 +3165,7 @@
             counter.style.padding = '12px 16px';
             counter.style.borderTop = '1px solid rgba(108, 117, 125, 0.2)';
             counter.style.textAlign = 'center';
-            counter.style.background = 'rgba(102, 126, 234, 0.05)';
+            counter.style.background = 'rgba(0, 112, 74, 0.05)';
             counter.style.borderRadius = '0 0 12px 12px';
             counter.style.fontWeight = '500';
             counter.style.letterSpacing = '0.3px';
