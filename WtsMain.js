@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.016
+// @version      1.3.017
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1863,14 +1863,23 @@
         panel.style.userSelect = 'none';
         panel.style.cursor = 'move';
         
-        // Set initial size based on minimized state
+        // Set initial size based on minimized state with responsive sizing
         if (isMinimized) {
             panel.style.width = '120px';
             panel.style.height = '40px';
             panel.style.padding = '0';
         } else {
-            panel.style.minWidth = '280px';
-            panel.style.maxWidth = '320px';
+            // Responsive sizing that adapts to viewport
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            // Calculate responsive width (20-25% of viewport, with min/max constraints)
+            const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
+            
+            panel.style.width = `${responsiveWidth}px`;
+            panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
+            panel.style.minWidth = '320px';
+            panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
             panel.style.padding = '0';
             panel.style.display = 'flex';
             panel.style.flexDirection = 'column';
@@ -1960,12 +1969,19 @@
             const currentlyMinimized = contentContainer.style.display === 'none';
             
             if (currentlyMinimized) {
-                // Expand
+                // Expand with responsive sizing
                 contentContainer.style.display = 'flex';
-                panel.style.width = '';
+                
+                // Recalculate responsive dimensions
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
+                
+                panel.style.width = `${responsiveWidth}px`;
                 panel.style.height = '';
                 panel.style.minWidth = '320px';
-                panel.style.maxWidth = '360px';
+                panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
+                panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
                 minimizeBtn.textContent = '➖';
                 minimizeBtn.title = 'Minimize Panel';
                 GM_setValue('wts_panel_minimized', false);
@@ -2026,6 +2042,38 @@
                 isDragging = false;
                 document.body.style.userSelect = '';
             }
+        });
+
+        // Add responsive resize handling
+        const handleResize = () => {
+            if (!isMinimized) {
+                const viewportWidth = window.innerWidth;
+                const viewportHeight = window.innerHeight;
+                
+                // Recalculate responsive dimensions
+                const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
+                
+                panel.style.width = `${responsiveWidth}px`;
+                panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
+                panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
+                
+                // Ensure panel stays within viewport bounds
+                const rect = panel.getBoundingClientRect();
+                if (rect.right > viewportWidth) {
+                    panel.style.left = `${viewportWidth - rect.width - 20}px`;
+                    panel.style.right = 'auto';
+                }
+                if (rect.bottom > viewportHeight) {
+                    panel.style.top = `${viewportHeight - rect.height - 20}px`;
+                }
+            }
+        };
+
+        // Debounced resize handler to avoid excessive calls
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(handleResize, 150);
         });
 
         // Helper function to adjust color brightness
@@ -2099,8 +2147,8 @@
             return group;
         };
 
-        // PRIMARY ACTIONS SECTION
-        const primaryHeader = createSectionHeader('Primary Actions');
+        // MAIN ACTIONS SECTION - Compact Two-Column Layout
+        const actionsHeader = createSectionHeader('Actions');
         
         const exportBtn = createButton('📦 Export Data', '#00704A', () => {
             console.log('📦 Export button clicked - using comprehensive data extraction');
@@ -2123,7 +2171,7 @@
             
             lastExtractedData = comprehensiveData;
             downloadXLSX(comprehensiveData);
-        }, { fullWidth: true });
+        });
 
         const refreshBtn = createButton('🔄 Refresh Data', '#00704A', () => {
             console.log('🔄 Refresh button clicked - using comprehensive data extraction');
@@ -2140,128 +2188,32 @@
             
             alert(summary);
             lastExtractedData = comprehensiveData;
-        }, { fullWidth: true });
+        });
 
-        const primaryGroup = createButtonGroup([exportBtn, refreshBtn]);
+        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
+            fileInput.click();
+        });
+
+        const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
+            versionCheckBtn.textContent = '🔄 Checking...';
+            versionCheckBtn.disabled = true;
+            
+            try {
+                await checkForUpdates(true);
+            } catch (error) {
+                console.error('❌ Error in version check button:', error);
+                alert(`❌ Version check failed: ${error.message}`);
+            } finally {
+                versionCheckBtn.textContent = '🔍 Updates';
+                versionCheckBtn.disabled = false;
+            }
+        });
+
+        // Create two-column layout for main actions
+        const actionsGroup = createButtonGroup([exportBtn, refreshBtn, uploadBtn, versionCheckBtn], 2);
 
         // NAVIGATION SECTION
         const navigationHeader = createSectionHeader('Navigation');
-
-        // SharePoint data refresh functionality
-        const sharePointUrl = 'https://share.amazon.com/sites/WFM_eComm_ABI/_layouts/15/download.aspx?SourceUrl=%2Fsites%2FWFM%5FeComm%5FABI%2FShared%20Documents%2FWFMOAC%2FDailyInventory%2FWFMOAC%20Inventory%20Data%2Exlsx';
-
-        function fetchSharePointData() {
-            console.log('🌐 Fetching data from SharePoint...');
-
-            // Show loading feedback - function still exists for potential future use
-            console.log('🔄 Fetching SharePoint data...');
-
-            GM_xmlhttpRequest({
-                method: 'GET',
-                url: sharePointUrl,
-                headers: {
-                    'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-                },
-                responseType: 'arraybuffer',
-                withCredentials: true,
-                onload: function(response) {
-                    console.log('📡 SharePoint response status:', response.status);
-
-                    if (response.status === 200) {
-                        console.log('✅ SharePoint file downloaded successfully');
-                        handleSharePointData(response.response);
-                    } else if (response.status === 302 || response.status === 401) {
-                        // Authentication required - open in new tab for user to authenticate
-                        console.log('🔐 Authentication required, opening SharePoint in new tab...');
-                        window.open(sharePointUrl, '_blank');
-                        alert('🔐 Authentication required!\n\nA new tab has been opened to SharePoint. Please:\n1. Sign in if prompted\n2. The file should download automatically\n3. Come back and try "Refresh Data" again');
-                    } else {
-                        console.error('❌ Failed to fetch SharePoint file:', response);
-                        alert(`❌ Failed to fetch data from SharePoint.\n\nStatus: ${response.status}\nCheck console for details.`);
-                    }
-
-                    // SharePoint fetch complete
-                    console.log('📡 SharePoint fetch completed');
-                },
-                onerror: function(error) {
-                    console.error('❌ Error accessing SharePoint:', error);
-                    alert('❌ Error accessing SharePoint data.\n\nThis might be due to:\n- Network connectivity issues\n- Authentication problems\n- SharePoint access restrictions\n\nCheck console for details.');
-
-                    // SharePoint fetch error handled
-                    console.log('❌ SharePoint fetch error handled');
-                }
-            });
-        }
-
-        async function handleSharePointData(arrayBuffer) {
-            try {
-                console.log('📊 Processing SharePoint data...');
-
-                // Show processing message for large files
-                const processingAlert = document.createElement('div');
-                processingAlert.style.position = 'fixed';
-                processingAlert.style.top = '50%';
-                processingAlert.style.left = '50%';
-                processingAlert.style.transform = 'translate(-50%, -50%)';
-                processingAlert.style.background = '#fff';
-                processingAlert.style.border = '2px solid #007bff';
-                processingAlert.style.borderRadius = '8px';
-                processingAlert.style.padding = '20px';
-                processingAlert.style.zIndex = '10001';
-                processingAlert.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                processingAlert.innerHTML = `
-                    <div style="text-align: center;">
-                        <div style="font-size: 16px; margin-bottom: 10px;">📊 Processing SharePoint data...</div>
-                        <div style="font-size: 14px; color: #666;">This may take a moment for large files</div>
-                    </div>
-                `;
-                document.body.appendChild(processingAlert);
-
-                // Allow UI to update
-                await new Promise(resolve => setTimeout(resolve, 100));
-
-                const newItems = await parseXLSX(arrayBuffer);
-
-                // Remove processing message
-                // FIXED: Safe processing message removal
-                try {
-                    if (processingAlert && document.body.contains(processingAlert)) {
-                        document.body.removeChild(processingAlert);
-                        console.log("🐛 OVERLAY REMOVAL DEBUG - Successfully removed processing overlay");
-                    }
-                } catch (removeError) {
-                    console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
-                }
-
-                // Stream directly to IndexedDB without holding in memory
-                const itemCount = await parseXLSXStreaming(arrayBuffer);
-
-                // Update UI
-                await updateItemDatabaseStatus();
-
-                alert(`✅ Successfully streamed ${itemCount.toLocaleString()} items from SharePoint to IndexedDB!\n\nData is now available for searching.`);
-
-            } catch (error) {
-                // Remove processing message if it exists
-                console.log("🐛 OVERLAY REMOVAL DEBUG - Error handler attempting to remove processing overlay");
-                const processingAlert = document.querySelector('div[style*="Processing SharePoint data"]');
-                console.log("🐛 OVERLAY REMOVAL DEBUG - Found processing alert element:", !!processingAlert);
-                if (processingAlert) {
-                    console.log("🐛 OVERLAY REMOVAL DEBUG - Parent element:", processingAlert.parentElement);
-                    console.log("🐛 OVERLAY REMOVAL DEBUG - Parent in DOM:", processingAlert.parentElement ? document.body.contains(processingAlert.parentElement) : false);
-                    try {
-                        document.body.removeChild(processingAlert.parentElement);
-                        console.log("🐛 OVERLAY REMOVAL DEBUG - Successfully removed processing overlay");
-                    } catch (removeError) {
-                        console.error("🐛 OVERLAY REMOVAL DEBUG - ERROR removing overlay:", removeError);
-                    }
-                }
-                console.error('❌ Error processing SharePoint data:', error);
-                alert(`❌ Error processing SharePoint data: ${error.message}\n\nCheck console for details.`);
-            }
-        }
-
-        // SharePoint data refresh button - REMOVED per user request
 
         // Create store switching dropdown
         const storeSelectContainer = document.createElement('div');
@@ -2639,12 +2591,9 @@
         asinInputContainer.appendChild(asinInput);
         asinInputContainer.appendChild(goToItemBtn);
 
-        // SEARCH SECTION
-        const searchHeader = createSectionHeader('Search');
-
-        // Item Search Feature
+        // Item Search Feature (removed separate "Search" section header)
         const itemSearchContainer = document.createElement('div');
-        itemSearchContainer.style.marginTop = '8px';
+        itemSearchContainer.style.marginTop = '16px';
         itemSearchContainer.style.display = 'none'; // Hidden by default until database is loaded
 
         const itemSearchLabel = document.createElement('div');
@@ -2943,28 +2892,43 @@
         itemSearchContainer.appendChild(itemSearchInput);
         itemSearchContainer.appendChild(searchResultsContainer);
 
-        // TOOLS/SETTINGS SECTION
-        const toolsHeader = createSectionHeader('Tools & Settings');
+        // SETTINGS SECTION - Collapsible
+        const settingsHeader = createSectionHeader('Settings');
         
-        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
-            fileInput.click();
-        });
-
-        const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
-            versionCheckBtn.textContent = '🔄 Checking...';
-            versionCheckBtn.disabled = true;
-            
-            try {
-                await checkForUpdates(true);
-            } catch (error) {
-                console.error('❌ Error in version check button:', error);
-                alert(`❌ Version check failed: ${error.message}`);
-            } finally {
-                versionCheckBtn.textContent = '🔍 Updates';
-                versionCheckBtn.disabled = false;
+        // Create collapsible settings container
+        const settingsContainer = document.createElement('div');
+        settingsContainer.style.marginTop = '8px';
+        
+        // Settings toggle button
+        const settingsToggleBtn = createButton('⚙️ Show Settings', '#6c757d', () => {
+            const isHidden = settingsContent.style.display === 'none';
+            if (isHidden) {
+                settingsContent.style.display = 'block';
+                settingsToggleBtn.textContent = '⚙️ Hide Settings';
+                GM_setValue('wts_settings_expanded', true);
+            } else {
+                settingsContent.style.display = 'none';
+                settingsToggleBtn.textContent = '⚙️ Show Settings';
+                GM_setValue('wts_settings_expanded', false);
             }
-        });
+        }, { fullWidth: true });
 
+        // Settings content container
+        const settingsContent = document.createElement('div');
+        const settingsExpanded = GM_getValue('wts_settings_expanded', false);
+        settingsContent.style.display = settingsExpanded ? 'block' : 'none';
+        settingsContent.style.marginTop = '8px';
+        settingsContent.style.padding = '12px';
+        settingsContent.style.background = 'rgba(0, 112, 74, 0.05)';
+        settingsContent.style.borderRadius = '8px';
+        settingsContent.style.border = '1px solid rgba(0, 112, 74, 0.2)';
+
+        // Update toggle button text based on initial state
+        if (settingsExpanded) {
+            settingsToggleBtn.textContent = '⚙️ Hide Settings';
+        }
+
+        // File input for CSV uploads
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.csv';
@@ -2977,8 +2941,6 @@
             }
             fileInput.value = '';
         });
-
-        const toolsGroup = createButtonGroup([uploadBtn, versionCheckBtn], 2);
 
         // Debug info button for troubleshooting
         const debugBtn = createButton('🐛 Debug Info', '#e83e8c', async () => {
@@ -3007,23 +2969,26 @@
             alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
         }, { fullWidth: true });
 
+        // Add settings items to settings content
+        settingsContent.appendChild(csrfSettingsBtn);
+        settingsContent.appendChild(debugBtn);
+        
+        settingsContainer.appendChild(settingsToggleBtn);
+        settingsContainer.appendChild(settingsContent);
+
         // STORE MANAGEMENT SECTION
         const storeHeader = createSectionHeader('Store Management');
 
-        // Assemble all content sections
-        contentContainer.appendChild(primaryHeader);
-        contentContainer.appendChild(primaryGroup);
+        // Assemble all content sections in compact layout
+        contentContainer.appendChild(actionsHeader);
+        contentContainer.appendChild(actionsGroup);
         
         contentContainer.appendChild(navigationHeader);
         contentContainer.appendChild(asinInputContainer);
-        
-        contentContainer.appendChild(searchHeader);
         contentContainer.appendChild(itemSearchContainer);
         
-        contentContainer.appendChild(toolsHeader);
-        contentContainer.appendChild(toolsGroup);
-        contentContainer.appendChild(csrfSettingsBtn);
-        contentContainer.appendChild(debugBtn);
+        contentContainer.appendChild(settingsHeader);
+        contentContainer.appendChild(settingsContainer);
         
         contentContainer.appendChild(storeHeader);
         contentContainer.appendChild(statusDiv);
