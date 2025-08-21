@@ -2810,7 +2810,7 @@
                 </div>
 
                 <div style="margin-bottom: 24px;">
-                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔍 Item Search</h3>
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔍 Item Search *Disabled*</h3>
                     <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Search the loaded item database by ASIN, name, SKU, or store.</p>
                     <p style="margin: 0 0 8px 0;"><strong>How to use:</strong></p>
                     <ol style="margin: 8px 0 0 20px; padding: 0;">
