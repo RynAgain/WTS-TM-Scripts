@@ -14,7 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
-// @connect      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
+// @connect      https://raw.githubusercontent.com/
 // @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @run-at       document-start
@@ -2430,6 +2430,7 @@
         const uploadBtn = createButton('📁 Upload XLSX', '#00704A', () => {
             fileInput.click();
         });
+        uploadBtn.title = 'Upload XLSX file with Acro and StoreId columns for store mapping';
 
         const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
             versionCheckBtn.textContent = '🔄 Checking...';
@@ -2775,14 +2776,15 @@
                 </div>
 
                 <div style="margin-bottom: 24px;">
-                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">📁 Upload CSV</h3>
-                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Upload store mapping CSV files to enable store switching functionality.</p>
-                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "📁 Upload CSV" and select a CSV file with StoreCode and StoreId columns.</p>
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">📁 Upload XLSX</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Upload store mapping XLSX files to enable store switching functionality.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "📁 Upload XLSX" and select an XLSX file with Acro and StoreId columns.</p>
                     <p style="margin: 0 0 8px 0;"><strong>Required format:</strong></p>
                     <ul style="margin: 8px 0 0 20px; padding: 0;">
-                        <li>CSV file with headers: <code style="background: #f8f9fa; padding: 2px 4px; border-radius: 3px;">StoreCode,StoreId</code></li>
-                        <li>StoreCode: 3-character store codes (e.g., "WFM", "ABC")</li>
+                        <li>XLSX file with headers: <code style="background: #f8f9fa; padding: 2px 4px; border-radius: 3px;">Acro,StoreId</code></li>
+                        <li>Acro: 3-character store codes (e.g., "WFM", "ABC")</li>
                         <li>StoreId: Numeric store identifiers</li>
+                        <li>Additional columns are ignored</li>
                     </ul>
                     <p style="margin: 8px 0 0 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;"><strong>⚠️ Note:</strong> Store mappings are saved locally and persist between sessions.</p>
                 </div>
