@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.017
+// @version      1.3.018
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1861,13 +1861,19 @@
         panel.style.boxShadow = '0 8px 24px rgba(0, 112, 74, 0.15)';
         panel.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         panel.style.userSelect = 'none';
-        panel.style.cursor = 'move';
+        // Remove cursor: 'move' from panel - will be added only to header
         
         // Set initial size based on minimized state with responsive sizing
         if (isMinimized) {
-            panel.style.width = '120px';
-            panel.style.height = '40px';
+            // Minimized state: left-side tab
+            panel.style.left = '0';
+            panel.style.top = '50%';
+            panel.style.right = 'auto';
+            panel.style.transform = 'translateY(-50%)';
+            panel.style.width = '40px';
+            panel.style.height = '120px';
             panel.style.padding = '0';
+            panel.style.borderRadius = '0 12px 12px 0';
         } else {
             // Responsive sizing that adapts to viewport
             const viewportWidth = window.innerWidth;
@@ -1883,6 +1889,7 @@
             panel.style.padding = '0';
             panel.style.display = 'flex';
             panel.style.flexDirection = 'column';
+            panel.style.transform = 'none';
         }
 
         // Create professional header
@@ -1890,13 +1897,14 @@
         header.style.display = 'flex';
         header.style.alignItems = 'center';
         header.style.justifyContent = 'space-between';
-        header.style.padding = '16px 20px';
+        header.style.padding = '12px 16px';
         header.style.background = 'linear-gradient(135deg, #00704A 0%, #005A3C 100%)';
         header.style.borderRadius = '10px 10px 0 0';
         header.style.fontSize = '16px';
         header.style.fontWeight = '600';
         header.style.color = '#ffffff';
         header.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
+        header.style.cursor = 'move'; // Add drag cursor only to header
 
         const headerLeft = document.createElement('div');
         headerLeft.style.display = 'flex';
@@ -1957,10 +1965,10 @@
 
         // Create content container
         const contentContainer = document.createElement('div');
-        contentContainer.style.padding = '20px';
+        contentContainer.style.padding = '12px 16px'; // Reduced from 20px
         contentContainer.style.display = isMinimized ? 'none' : 'flex';
         contentContainer.style.flexDirection = 'column';
-        contentContainer.style.gap = '16px';
+        contentContainer.style.gap = '10px'; // Reduced from 16px
         contentContainer.style.background = '#ffffff';
         contentContainer.style.borderRadius = '0 0 10px 10px';
 
@@ -1969,7 +1977,7 @@
             const currentlyMinimized = contentContainer.style.display === 'none';
             
             if (currentlyMinimized) {
-                // Expand with responsive sizing
+                // Expand from left-side tab
                 contentContainer.style.display = 'flex';
                 
                 // Recalculate responsive dimensions
@@ -1977,21 +1985,31 @@
                 const viewportHeight = window.innerHeight;
                 const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
                 
+                panel.style.left = 'auto';
+                panel.style.top = '20px';
+                panel.style.right = '20px';
+                panel.style.transform = 'none';
                 panel.style.width = `${responsiveWidth}px`;
                 panel.style.height = '';
                 panel.style.minWidth = '320px';
                 panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
                 panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
+                panel.style.borderRadius = '12px';
                 minimizeBtn.textContent = '➖';
                 minimizeBtn.title = 'Minimize Panel';
                 GM_setValue('wts_panel_minimized', false);
             } else {
-                // Minimize
+                // Minimize to left-side tab
                 contentContainer.style.display = 'none';
-                panel.style.width = '140px';
-                panel.style.height = '50px';
+                panel.style.left = '0';
+                panel.style.top = '50%';
+                panel.style.right = 'auto';
+                panel.style.transform = 'translateY(-50%)';
+                panel.style.width = '40px';
+                panel.style.height = '120px';
                 panel.style.minWidth = '';
                 panel.style.maxWidth = '';
+                panel.style.borderRadius = '0 12px 12px 0';
                 minimizeBtn.textContent = '📋';
                 minimizeBtn.title = 'Expand Panel';
                 GM_setValue('wts_panel_minimized', true);
@@ -2046,7 +2064,8 @@
 
         // Add responsive resize handling
         const handleResize = () => {
-            if (!isMinimized) {
+            const currentlyMinimized = contentContainer.style.display === 'none';
+            if (!currentlyMinimized) {
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
                 
@@ -2066,6 +2085,10 @@
                 if (rect.bottom > viewportHeight) {
                     panel.style.top = `${viewportHeight - rect.height - 20}px`;
                 }
+            } else {
+                // Keep minimized tab centered vertically on resize
+                panel.style.top = '50%';
+                panel.style.transform = 'translateY(-50%)';
             }
         };
 
@@ -2094,12 +2117,12 @@
         const createButton = (text, color, onClick, options = {}) => {
             const btn = document.createElement('button');
             btn.textContent = text;
-            btn.style.padding = '10px 16px';
+            btn.style.padding = '8px 12px'; // Reduced from 10px 16px
             btn.style.background = color;
             btn.style.color = '#ffffff';
             btn.style.border = 'none';
             btn.style.borderRadius = '6px';
-            btn.style.cursor = 'pointer';
+            btn.style.cursor = 'pointer'; // Ensure buttons have pointer cursor, not move
             btn.style.fontSize = '13px';
             btn.style.fontWeight = '500';
             btn.style.transition = 'all 0.2s ease';
@@ -2109,10 +2132,12 @@
             // Professional hover effects (color only)
             btn.addEventListener('mouseenter', () => {
                 btn.style.backgroundColor = adjustBrightness(color, 0.1);
+                btn.style.cursor = 'pointer'; // Ensure cursor stays as pointer on hover
             });
             
             btn.addEventListener('mouseleave', () => {
                 btn.style.backgroundColor = color;
+                btn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
             });
             
             btn.addEventListener('click', onClick);
@@ -2128,8 +2153,8 @@
             header.style.color = '#495057'; // Improved contrast
             header.style.textTransform = 'uppercase';
             header.style.letterSpacing = '0.5px';
-            header.style.marginTop = '16px';
-            header.style.marginBottom = '8px';
+            header.style.marginTop = '10px'; // Reduced from 16px
+            header.style.marginBottom = '6px'; // Reduced from 8px
             header.style.paddingBottom = '4px';
             header.style.borderBottom = '1px solid #00704A';
             return header;
@@ -2140,8 +2165,8 @@
             const group = document.createElement('div');
             group.style.display = 'grid';
             group.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
-            group.style.gap = '8px';
-            group.style.marginBottom = '8px';
+            group.style.gap = '6px'; // Reduced from 8px
+            group.style.marginBottom = '6px'; // Reduced from 8px
             
             buttons.forEach(btn => group.appendChild(btn));
             return group;
@@ -2263,31 +2288,31 @@
         statusDiv.style.fontSize = '13px';
         statusDiv.style.color = '#6c757d';
         statusDiv.style.textAlign = 'center';
-        statusDiv.style.marginTop = '8px';
-        statusDiv.style.padding = '8px 12px';
+        statusDiv.style.marginTop = '6px'; // Reduced from 8px
+        statusDiv.style.padding = '6px 10px'; // Reduced from 8px 12px
         statusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
         statusDiv.style.borderRadius = '8px';
         statusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
         statusDiv.style.fontWeight = '500';
         statusDiv.textContent = 'No store mappings loaded';
 
-        // Create status display for item database
-        const itemDatabaseStatusDiv = document.createElement('div');
-        itemDatabaseStatusDiv.style.fontSize = '13px';
-        itemDatabaseStatusDiv.style.color = '#6c757d';
-        itemDatabaseStatusDiv.style.textAlign = 'center';
-        itemDatabaseStatusDiv.style.marginTop = '8px';
-        itemDatabaseStatusDiv.style.padding = '8px 12px';
-        itemDatabaseStatusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
-        itemDatabaseStatusDiv.style.borderRadius = '8px';
-        itemDatabaseStatusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
-        itemDatabaseStatusDiv.style.fontWeight = '500';
-        itemDatabaseStatusDiv.textContent = 'No item database loaded';
+        // Create status display for item database, disabled
+        // const itemDatabaseStatusDiv = document.createElement('div');
+        // itemDatabaseStatusDiv.style.fontSize = '13px';
+        // itemDatabaseStatusDiv.style.color = '#6c757d';
+        // itemDatabaseStatusDiv.style.textAlign = 'center';
+        // itemDatabaseStatusDiv.style.marginTop = '8px';
+        // itemDatabaseStatusDiv.style.padding = '8px 12px';
+        // itemDatabaseStatusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
+        // itemDatabaseStatusDiv.style.borderRadius = '8px'
+        // itemDatabaseStatusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
+        // itemDatabaseStatusDiv.style.fontWeight = '500';
+        // itemDatabaseStatusDiv.textContent = 'No item database loaded';
 
         // Create CSRF settings button
         const csrfSettingsBtn = document.createElement('button');
         csrfSettingsBtn.textContent = '⚙️ CSRF Settings';
-        csrfSettingsBtn.style.padding = '10px 16px';
+        csrfSettingsBtn.style.padding = '8px 12px'; // Reduced from 10px 16px
         csrfSettingsBtn.style.background = '#6c757d';
         csrfSettingsBtn.style.color = '#fff';
         csrfSettingsBtn.style.border = 'none';
@@ -2295,16 +2320,19 @@
         csrfSettingsBtn.style.cursor = 'pointer';
         csrfSettingsBtn.style.fontSize = '13px';
         csrfSettingsBtn.style.fontWeight = '500';
-        csrfSettingsBtn.style.marginTop = '8px';
+        csrfSettingsBtn.style.marginTop = '6px'; // Reduced from 8px
         csrfSettingsBtn.style.boxShadow = 'none';
+        csrfSettingsBtn.style.cursor = 'pointer'; // Ensure button has pointer cursor
         
         // Professional hover effects (color only)
         csrfSettingsBtn.addEventListener('mouseenter', () => {
             csrfSettingsBtn.style.background = '#5a6268';
+            csrfSettingsBtn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
         });
         
         csrfSettingsBtn.addEventListener('mouseleave', () => {
             csrfSettingsBtn.style.background = '#6c757d';
+            csrfSettingsBtn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
         });
 
         // CSRF Settings Modal
@@ -2512,7 +2540,7 @@
 
         // ASIN Input Feature (moved to Navigation section)
         const asinInputContainer = document.createElement('div');
-        asinInputContainer.style.marginTop = '8px';
+        asinInputContainer.style.marginTop = '6px'; // Reduced from 8px
 
         const asinInput = document.createElement('input');
         asinInput.type = 'text';
@@ -2524,6 +2552,7 @@
         asinInput.style.fontSize = '12px';
         asinInput.style.boxSizing = 'border-box';
         asinInput.style.marginBottom = '4px';
+        asinInput.style.cursor = 'text'; // Ensure input has text cursor
 
         const goToItemBtn = createButton('🔗 Go to Item', '#00704A', () => {
             const asin = asinInput.value;
@@ -2593,7 +2622,7 @@
 
         // Item Search Feature (removed separate "Search" section header)
         const itemSearchContainer = document.createElement('div');
-        itemSearchContainer.style.marginTop = '16px';
+        itemSearchContainer.style.marginTop = '10px'; // Reduced from 16px
         itemSearchContainer.style.display = 'none'; // Hidden by default until database is loaded
 
         const itemSearchLabel = document.createElement('div');
@@ -2642,6 +2671,7 @@
         searchTypeSelect.style.border = '1px solid #ccc';
         searchTypeSelect.style.fontSize = '12px';
         searchTypeSelect.style.marginBottom = '4px';
+        searchTypeSelect.style.cursor = 'pointer'; // Ensure select has pointer cursor
 
         const searchOptions = [
             { value: 'all', text: 'Search All Fields' },
@@ -2671,15 +2701,18 @@
         itemSearchInput.style.marginBottom = '8px';
         itemSearchInput.style.background = '#ffffff';
         itemSearchInput.style.color = '#495057';
+        itemSearchInput.style.cursor = 'text'; // Ensure input has text cursor
         
         // Professional focus effects (no animations)
         itemSearchInput.addEventListener('focus', () => {
             itemSearchInput.style.border = '2px solid #005A3C';
             itemSearchInput.style.outline = 'none';
+            itemSearchInput.style.cursor = 'text'; // Ensure cursor stays as text
         });
         
         itemSearchInput.addEventListener('blur', () => {
             itemSearchInput.style.border = '2px solid #00704A';
+            itemSearchInput.style.cursor = 'text'; // Ensure cursor stays as text
         });
 
         const searchResultsContainer = document.createElement('div');
@@ -2897,7 +2930,7 @@
         
         // Create collapsible settings container
         const settingsContainer = document.createElement('div');
-        settingsContainer.style.marginTop = '8px';
+        settingsContainer.style.marginTop = '6px'; // Reduced from 8px
         
         // Settings toggle button
         const settingsToggleBtn = createButton('⚙️ Show Settings', '#6c757d', () => {
@@ -2917,8 +2950,8 @@
         const settingsContent = document.createElement('div');
         const settingsExpanded = GM_getValue('wts_settings_expanded', false);
         settingsContent.style.display = settingsExpanded ? 'block' : 'none';
-        settingsContent.style.marginTop = '8px';
-        settingsContent.style.padding = '12px';
+        settingsContent.style.marginTop = '6px'; // Reduced from 8px
+        settingsContent.style.padding = '8px'; // Reduced from 12px
         settingsContent.style.background = 'rgba(0, 112, 74, 0.05)';
         settingsContent.style.borderRadius = '8px';
         settingsContent.style.border = '1px solid rgba(0, 112, 74, 0.2)';
@@ -2933,6 +2966,7 @@
         fileInput.type = 'file';
         fileInput.accept = '.csv';
         fileInput.style.display = 'none';
+        fileInput.style.cursor = 'pointer'; // Ensure file input has pointer cursor when visible
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -3148,6 +3182,7 @@
             counter.style.letterSpacing = '0.3px';
             counter.style.position = 'relative';
             counter.style.marginTop = '0';
+            counter.style.cursor = 'default'; // Ensure counter has default cursor, not move
 
             // Append counter directly to the panel (after content container)
             wtsPanel.appendChild(counter);
