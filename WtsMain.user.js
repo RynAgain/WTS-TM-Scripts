@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.028
+// @version      1.3.029
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -14,7 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
-// @connect      https://raw.githubusercontent.com/
+// @connect      raw.githubusercontent.com
 // @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @run-at       document-start
@@ -124,7 +124,7 @@
     let _initializing = false;
 
     // Version checking variables
-    const CURRENT_VERSION = '1.3.028';
+    const CURRENT_VERSION = '1.3.029';
     const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -1932,6 +1932,8 @@
             header.style.borderRadius = '0 16px 16px 0';
             header.style.writingMode = 'vertical-rl';
             header.style.textOrientation = 'mixed';
+            header.style.whiteSpace = 'nowrap';
+            header.style.overflow = 'hidden';
         }
 
         const headerLeft = document.createElement('div');
@@ -2791,9 +2793,23 @@
 
                 <div style="margin-bottom: 24px;">
                     <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔍 Updates</h3>
-                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Check for and install script updates from GitHub.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Check for available script updates from GitHub.</p>
                     <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "🔍 Updates" to manually check for new versions.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Important:</strong> This button only <strong>checks</strong> for updates - it does <strong>not</strong> automatically update the script.</p>
                     <p style="margin: 0 0 8px 0;"><strong>Automatic checking:</strong> The script automatically checks for updates every 24 hours.</p>
+                    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 4px; margin: 12px 0;">
+                        <p style="margin: 0 0 8px 0; font-weight: 600; color: #856404;">⚠️ To Actually Update the Script:</p>
+                        <p style="margin: 0 0 8px 0;">You must use <strong>Tampermonkey</strong> to perform the actual update:</p>
+                        <ol style="margin: 8px 0 0 20px; padding: 0; color: #856404;">
+                            <li>Open Tampermonkey dashboard (click the Tampermonkey icon → Dashboard)</li>
+                            <li>Find "Whole Foods ASIN Exporter with Store Mapping" in the list</li>
+                            <li>Click the "Last updated" column or the script name</li>
+                            <li>Click "Update" tab in the script editor</li>
+                            <li>Click "Update" button to download and install the latest version</li>
+                            <li>Refresh the Whole Foods page to use the updated script</li>
+                        </ol>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #856404;"><strong>Alternative:</strong> You can also enable automatic updates in Tampermonkey settings.</p>
+                    </div>
                     <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Updates include bug fixes, new features, and performance improvements.</p>
                 </div>
 
