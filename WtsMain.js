@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.020
+// @version      1.3.021
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -14,7 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
-// @connect      share.amazon.com
+// @connect      https://github.com
 // @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @run-at       document-start
@@ -1865,15 +1865,16 @@
         
         // Set initial size based on minimized state with responsive sizing
         if (isMinimized) {
-            // Minimized state: left-side tab
+            // Minimized state: improved left-side tab
             panel.style.left = '0';
             panel.style.top = '50%';
             panel.style.right = 'auto';
             panel.style.transform = 'translateY(-50%)';
-            panel.style.width = '40px';
-            panel.style.height = '120px';
+            panel.style.width = '60px';
+            panel.style.height = '180px';
             panel.style.padding = '0';
-            panel.style.borderRadius = '0 12px 12px 0';
+            panel.style.borderRadius = '0 16px 16px 0';
+            panel.style.boxShadow = '2px 0 12px rgba(0, 112, 74, 0.3)';
         } else {
             // Responsive sizing that adapts to viewport
             const viewportWidth = window.innerWidth;
@@ -1899,12 +1900,23 @@
         header.style.justifyContent = 'space-between';
         header.style.padding = '12px 16px';
         header.style.background = 'linear-gradient(135deg, #00704A 0%, #005A3C 100%)';
-        header.style.borderRadius = '10px 10px 0 0';
+        header.style.borderRadius = isMinimized ? '0 16px 16px 0' : '10px 10px 0 0';
         header.style.fontSize = '16px';
         header.style.fontWeight = '600';
         header.style.color = '#ffffff';
         header.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
         header.style.cursor = 'move'; // Add drag cursor only to header
+        
+        // Special styling for minimized state
+        if (isMinimized) {
+            header.style.flexDirection = 'column';
+            header.style.justifyContent = 'center';
+            header.style.padding = '16px 8px';
+            header.style.height = '100%';
+            header.style.borderRadius = '0 16px 16px 0';
+            header.style.writingMode = 'vertical-rl';
+            header.style.textOrientation = 'mixed';
+        }
 
         const headerLeft = document.createElement('div');
         headerLeft.style.display = 'flex';
@@ -1917,9 +1929,16 @@
 
         const headerTitle = document.createElement('span');
         headerTitle.textContent = 'WTS Tools';
-        headerTitle.style.fontSize = '16px';
+        headerTitle.style.fontSize = isMinimized ? '14px' : '16px';
         headerTitle.style.fontWeight = '600';
         headerTitle.style.letterSpacing = '0.5px';
+        headerTitle.style.textAlign = 'center';
+        headerTitle.style.lineHeight = isMinimized ? '1.2' : 'normal';
+        
+        // Hide title in minimized state to save space
+        if (isMinimized) {
+            headerTitle.style.display = 'none';
+        }
 
         const headerRight = document.createElement('div');
         headerRight.style.display = 'flex';
@@ -1941,12 +1960,14 @@
         minimizeBtn.textContent = isMinimized ? '📋' : '➖';
         minimizeBtn.style.background = 'rgba(255,255,255,0.15)';
         minimizeBtn.style.border = '1px solid rgba(255,255,255,0.2)';
-        minimizeBtn.style.borderRadius = '6px';
+        minimizeBtn.style.borderRadius = isMinimized ? '8px' : '6px';
         minimizeBtn.style.color = '#ffffff';
         minimizeBtn.style.cursor = 'pointer';
-        minimizeBtn.style.padding = '6px 10px';
-        minimizeBtn.style.fontSize = '12px';
+        minimizeBtn.style.padding = isMinimized ? '12px 8px' : '6px 10px';
+        minimizeBtn.style.fontSize = isMinimized ? '18px' : '12px';
         minimizeBtn.style.fontWeight = '500';
+        minimizeBtn.style.width = isMinimized ? '100%' : 'auto';
+        minimizeBtn.style.marginTop = isMinimized ? '8px' : '0';
         minimizeBtn.title = isMinimized ? 'Expand Panel' : 'Minimize Panel';
 
         minimizeBtn.addEventListener('mouseenter', () => {
@@ -1956,12 +1977,45 @@
             minimizeBtn.style.background = 'rgba(255,255,255,0.15)';
         });
 
-        headerLeft.appendChild(brandIcon);
-        headerLeft.appendChild(headerTitle);
-        headerRight.appendChild(versionBadge);
-        headerRight.appendChild(minimizeBtn);
-        header.appendChild(headerLeft);
-        header.appendChild(headerRight);
+        if (isMinimized) {
+            // Minimized layout: vertical stack
+            const minimizedContent = document.createElement('div');
+            minimizedContent.style.display = 'flex';
+            minimizedContent.style.flexDirection = 'column';
+            minimizedContent.style.alignItems = 'center';
+            minimizedContent.style.justifyContent = 'center';
+            minimizedContent.style.height = '100%';
+            minimizedContent.style.gap = '12px';
+            
+            const minimizedTitle = document.createElement('div');
+            minimizedTitle.textContent = 'WTS';
+            minimizedTitle.style.fontSize = '14px';
+            minimizedTitle.style.fontWeight = '700';
+            minimizedTitle.style.color = '#ffffff';
+            minimizedTitle.style.textAlign = 'center';
+            minimizedTitle.style.letterSpacing = '1px';
+            
+            const minimizedSubtitle = document.createElement('div');
+            minimizedSubtitle.textContent = 'TOOLS';
+            minimizedSubtitle.style.fontSize = '10px';
+            minimizedSubtitle.style.fontWeight = '500';
+            minimizedSubtitle.style.color = 'rgba(255,255,255,0.8)';
+            minimizedSubtitle.style.textAlign = 'center';
+            minimizedSubtitle.style.letterSpacing = '0.5px';
+            
+            minimizedContent.appendChild(minimizedTitle);
+            minimizedContent.appendChild(minimizedSubtitle);
+            minimizedContent.appendChild(minimizeBtn);
+            header.appendChild(minimizedContent);
+        } else {
+            // Normal layout: horizontal
+            headerLeft.appendChild(brandIcon);
+            headerLeft.appendChild(headerTitle);
+            headerRight.appendChild(versionBadge);
+            headerRight.appendChild(minimizeBtn);
+            header.appendChild(headerLeft);
+            header.appendChild(headerRight);
+        }
 
         // Create content container
         const contentContainer = document.createElement('div');
@@ -1995,23 +2049,130 @@
                 panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
                 panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
                 panel.style.borderRadius = '12px';
+                panel.style.boxShadow = '0 8px 24px rgba(0, 112, 74, 0.15)';
+                
+                // Restore normal header layout
+                header.style.flexDirection = 'row';
+                header.style.justifyContent = 'space-between';
+                header.style.padding = '12px 16px';
+                header.style.height = 'auto';
+                header.style.borderRadius = '10px 10px 0 0';
+                
+                // Rebuild header content for normal state
+                header.innerHTML = '';
+                
+                // Recreate header left section
+                const newHeaderLeft = document.createElement('div');
+                newHeaderLeft.style.display = 'flex';
+                newHeaderLeft.style.alignItems = 'center';
+                newHeaderLeft.style.gap = '12px';
+                
+                const newBrandIcon = document.createElement('span');
+                newBrandIcon.textContent = '🛒';
+                newBrandIcon.style.fontSize = '18px';
+                
+                const newHeaderTitle = document.createElement('span');
+                newHeaderTitle.textContent = 'WTS Tools';
+                newHeaderTitle.style.fontSize = '16px';
+                newHeaderTitle.style.fontWeight = '600';
+                newHeaderTitle.style.letterSpacing = '0.5px';
+                
+                newHeaderLeft.appendChild(newBrandIcon);
+                newHeaderLeft.appendChild(newHeaderTitle);
+                
+                // Recreate header right section
+                const newHeaderRight = document.createElement('div');
+                newHeaderRight.style.display = 'flex';
+                newHeaderRight.style.alignItems = 'center';
+                newHeaderRight.style.gap = '8px';
+                
+                const newVersionBadge = document.createElement('span');
+                newVersionBadge.textContent = `v${CURRENT_VERSION}`;
+                newVersionBadge.style.fontSize = '11px';
+                newVersionBadge.style.padding = '4px 10px';
+                newVersionBadge.style.background = 'rgba(255,255,255,0.15)';
+                newVersionBadge.style.borderRadius = '16px';
+                newVersionBadge.style.color = '#ffffff';
+                newVersionBadge.style.fontWeight = '500';
+                newVersionBadge.style.border = '1px solid rgba(255,255,255,0.2)';
+                
+                // Update minimize button for normal state
                 minimizeBtn.textContent = '➖';
                 minimizeBtn.title = 'Minimize Panel';
+                minimizeBtn.style.borderRadius = '6px';
+                minimizeBtn.style.padding = '6px 10px';
+                minimizeBtn.style.fontSize = '12px';
+                minimizeBtn.style.width = 'auto';
+                minimizeBtn.style.marginTop = '0';
+                
+                newHeaderRight.appendChild(newVersionBadge);
+                newHeaderRight.appendChild(minimizeBtn);
+                
+                header.appendChild(newHeaderLeft);
+                header.appendChild(newHeaderRight);
+                
                 GM_setValue('wts_panel_minimized', false);
             } else {
-                // Minimize to left-side tab
+                // Minimize to improved left-side tab
                 contentContainer.style.display = 'none';
                 panel.style.left = '0';
                 panel.style.top = '50%';
                 panel.style.right = 'auto';
                 panel.style.transform = 'translateY(-50%)';
-                panel.style.width = '40px';
-                panel.style.height = '120px';
+                panel.style.width = '60px';
+                panel.style.height = '180px';
                 panel.style.minWidth = '';
                 panel.style.maxWidth = '';
-                panel.style.borderRadius = '0 12px 12px 0';
+                panel.style.borderRadius = '0 16px 16px 0';
+                panel.style.boxShadow = '2px 0 12px rgba(0, 112, 74, 0.3)';
+                
+                // Update header for minimized state
+                header.style.flexDirection = 'column';
+                header.style.justifyContent = 'center';
+                header.style.padding = '16px 8px';
+                header.style.height = '100%';
+                header.style.borderRadius = '0 16px 16px 0';
+                
+                // Rebuild header content for minimized state
+                header.innerHTML = '';
+                const minimizedContent = document.createElement('div');
+                minimizedContent.style.display = 'flex';
+                minimizedContent.style.flexDirection = 'column';
+                minimizedContent.style.alignItems = 'center';
+                minimizedContent.style.justifyContent = 'center';
+                minimizedContent.style.height = '100%';
+                minimizedContent.style.gap = '12px';
+                
+                const minimizedTitle = document.createElement('div');
+                minimizedTitle.textContent = 'WTS';
+                minimizedTitle.style.fontSize = '14px';
+                minimizedTitle.style.fontWeight = '700';
+                minimizedTitle.style.color = '#ffffff';
+                minimizedTitle.style.textAlign = 'center';
+                minimizedTitle.style.letterSpacing = '1px';
+                
+                const minimizedSubtitle = document.createElement('div');
+                minimizedSubtitle.textContent = 'TOOLS';
+                minimizedSubtitle.style.fontSize = '10px';
+                minimizedSubtitle.style.fontWeight = '500';
+                minimizedSubtitle.style.color = 'rgba(255,255,255,0.8)';
+                minimizedSubtitle.style.textAlign = 'center';
+                minimizedSubtitle.style.letterSpacing = '0.5px';
+                
+                // Update minimize button for minimized state
                 minimizeBtn.textContent = '📋';
                 minimizeBtn.title = 'Expand Panel';
+                minimizeBtn.style.borderRadius = '8px';
+                minimizeBtn.style.padding = '12px 8px';
+                minimizeBtn.style.fontSize = '18px';
+                minimizeBtn.style.width = '100%';
+                minimizeBtn.style.marginTop = '8px';
+                
+                minimizedContent.appendChild(minimizedTitle);
+                minimizedContent.appendChild(minimizedSubtitle);
+                minimizedContent.appendChild(minimizeBtn);
+                header.appendChild(minimizedContent);
+                
                 GM_setValue('wts_panel_minimized', true);
             }
         };
@@ -3152,8 +3313,8 @@
                     if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
                         // Use comprehensive data extraction for counter
                         const comprehensiveData = extractAllData();
-                        // Total now only counts visible cards, not shovelers
-                        counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards}`;
+                        // Total now only counts visible cards, not shovelers //finding tag 1
+                        counter.textContent = `Shovelers: ${comprehensiveData.totalShovelerASINs} || Cards: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards} | Total: ${comprehensiveData.totalVisibleASINs} `;
                     } else {
                         console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                         if (cardCounterInterval) {
