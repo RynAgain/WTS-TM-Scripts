@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.015
+// @version      1.3.016
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1861,6 +1861,7 @@
         panel.style.boxShadow = '0 8px 24px rgba(0, 112, 74, 0.15)';
         panel.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         panel.style.userSelect = 'none';
+        panel.style.cursor = 'move';
         
         // Set initial size based on minimized state
         if (isMinimized) {
@@ -1909,7 +1910,7 @@
         headerRight.style.gap = '8px';
 
         const versionBadge = document.createElement('span');
-        versionBadge.textContent = 'v1.3.014';
+        versionBadge.textContent = `v${CURRENT_VERSION}`;
         versionBadge.style.fontSize = '11px';
         versionBadge.style.padding = '4px 10px';
         versionBadge.style.background = 'rgba(255,255,255,0.15)';
@@ -1989,6 +1990,44 @@
         panel.appendChild(header);
         panel.appendChild(contentContainer);
 
+        // Add basic drag functionality
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+
+        header.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            const rect = panel.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+            
+            // Prevent text selection during drag
+            e.preventDefault();
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            e.preventDefault();
+            const x = e.clientX - dragOffset.x;
+            const y = e.clientY - dragOffset.y;
+            
+            // Keep panel within viewport bounds
+            const maxX = window.innerWidth - panel.offsetWidth;
+            const maxY = window.innerHeight - panel.offsetHeight;
+            
+            panel.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
+            panel.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
+            panel.style.right = 'auto'; // Remove right positioning when dragging
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.userSelect = '';
+            }
+        });
+
         // Helper function to adjust color brightness
         const adjustBrightness = (color, factor) => {
             // Simple brightness adjustment for hex colors
@@ -2038,13 +2077,13 @@
             header.textContent = title;
             header.style.fontSize = '12px';
             header.style.fontWeight = '600';
-            header.style.color = '#6c757d';
+            header.style.color = '#495057'; // Improved contrast
             header.style.textTransform = 'uppercase';
             header.style.letterSpacing = '0.5px';
             header.style.marginTop = '16px';
             header.style.marginBottom = '8px';
             header.style.paddingBottom = '4px';
-            header.style.borderBottom = '1px solid #e9ecef';
+            header.style.borderBottom = '1px solid #00704A';
             return header;
         };
 
@@ -2105,42 +2144,8 @@
 
         const primaryGroup = createButtonGroup([exportBtn, refreshBtn]);
 
-        // TOOLS SECTION
-        const toolsHeader = createSectionHeader('Tools');
-        
-        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
-            fileInput.click();
-        });
-
-        const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
-            versionCheckBtn.textContent = '🔄 Checking...';
-            versionCheckBtn.disabled = true;
-            
-            try {
-                await checkForUpdates(true);
-            } catch (error) {
-                console.error('❌ Error in version check button:', error);
-                alert(`❌ Version check failed: ${error.message}`);
-            } finally {
-                versionCheckBtn.textContent = '🔍 Updates';
-                versionCheckBtn.disabled = false;
-            }
-        });
-
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.csv';
-        fileInput.style.display = 'none';
-
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                handleCSVUpload(file);
-            }
-            fileInput.value = '';
-        });
-
-        const toolsGroup = createButtonGroup([uploadBtn, versionCheckBtn], 2);
+        // NAVIGATION SECTION
+        const navigationHeader = createSectionHeader('Navigation');
 
         // SharePoint data refresh functionality
         const sharePointUrl = 'https://share.amazon.com/sites/WFM_eComm_ABI/_layouts/15/download.aspx?SourceUrl=%2Fsites%2FWFM%5FeComm%5FABI%2FShared%20Documents%2FWFMOAC%2FDailyInventory%2FWFMOAC%20Inventory%20Data%2Exlsx';
@@ -2486,54 +2491,6 @@
 
         // Version check button - removed duplicate declaration, using the one from tools section
 
-        // Debug info button for troubleshooting
-        const debugBtn = document.createElement('button');
-        debugBtn.textContent = '🐛 Debug Info';
-        debugBtn.style.padding = '10px 16px';
-        debugBtn.style.background = '#e83e8c';
-        debugBtn.style.color = '#fff';
-        debugBtn.style.border = 'none';
-        debugBtn.style.borderRadius = '8px';
-        debugBtn.style.cursor = 'pointer';
-        debugBtn.style.fontSize = '13px';
-        debugBtn.style.fontWeight = '500';
-        debugBtn.style.marginTop = '4px';
-        debugBtn.style.boxShadow = 'none';
-        
-        // Professional hover effects (color only)
-        debugBtn.addEventListener('mouseenter', () => {
-            debugBtn.style.background = '#d91a72';
-        });
-        
-        debugBtn.addEventListener('mouseleave', () => {
-            debugBtn.style.background = '#e83e8c';
-        });
-
-        debugBtn.addEventListener('click', async () => {
-            const status = await getItemDatabaseStatus();
-            const debugInfo = {
-                timestamp: new Date().toISOString(),
-                url: window.location.href,
-                documentState: document.readyState,
-                panelExists: !!wtsPanel,
-                panelInDOM: wtsPanel ? document.body.contains(wtsPanel) : false,
-                isInitialized: isInitialized,
-                initAttempts: initializationAttempts,
-                networkInterceptionActive: networkInterceptionActive,
-                storeMappings: storeMappingData.size,
-                itemDatabaseCount: status.count,
-                capturedToken: !!getCapturedToken(),
-                storeInfo: getCurrentStoreInfo()
-            };
-
-            console.log('🐛 WTS Tools Debug Info:', debugInfo);
-
-            const debugText = Object.entries(debugInfo)
-                .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-                .join('\n');
-
-            alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
-        });
 
         // Reset Item DB button - REMOVED per user request
 
@@ -2556,7 +2513,7 @@
         const updateStatus = () => {
             if (storeMappingData.size === 0) {
                 statusDiv.textContent = 'No store mappings loaded';
-                statusDiv.style.color = '#666';
+                statusDiv.style.color = '#495057'; // Improved contrast
                 storeSelectContainer.style.display = 'none';
             } else {
                 statusDiv.textContent = `${storeMappingData.size} store mappings loaded`;
@@ -2573,7 +2530,7 @@
                 
                 if (status.count === 0) {
                     itemDatabaseStatusDiv.textContent = 'No item database loaded';
-                    itemDatabaseStatusDiv.style.color = '#666';
+                    itemDatabaseStatusDiv.style.color = '#495057'; // Improved contrast
                     // Only hide search container if it exists
                     if (typeof itemSearchContainer !== 'undefined') {
                         itemSearchContainer.style.display = 'none';
@@ -2592,7 +2549,7 @@
             } catch (error) {
                 console.error('❌ Error updating database status:', error);
                 itemDatabaseStatusDiv.textContent = 'Database status error';
-                itemDatabaseStatusDiv.style.color = '#dc3545';
+                itemDatabaseStatusDiv.style.color = '#721c24'; // Improved contrast for error state
             }
         };
 
@@ -2601,10 +2558,7 @@
 
         // Note: Initialization will be done after all UI elements are created
 
-        contentContainer.appendChild(exportBtn);
-        contentContainer.appendChild(refreshBtn);
-
-        // ASIN Input Feature
+        // ASIN Input Feature (moved to Navigation section)
         const asinInputContainer = document.createElement('div');
         asinInputContainer.style.marginTop = '8px';
 
@@ -2619,15 +2573,15 @@
         asinInput.style.boxSizing = 'border-box';
         asinInput.style.marginBottom = '4px';
 
-        const goToItemBtn = document.createElement('button');
-        goToItemBtn.textContent = '🔗 Go to Item';
-        goToItemBtn.style.padding = '10px';
-        goToItemBtn.style.backgroundColor = '#00704A';
-        goToItemBtn.style.color = '#fff';
-        goToItemBtn.style.border = 'none';
-        goToItemBtn.style.borderRadius = '5px';
-        goToItemBtn.style.cursor = 'pointer';
-        goToItemBtn.style.width = '100%';
+        const goToItemBtn = createButton('🔗 Go to Item', '#00704A', () => {
+            const asin = asinInput.value;
+            if (!asin.trim()) {
+                alert('❌ Please enter an ASIN');
+                asinInput.focus();
+                return;
+            }
+            navigateToItem(asin);
+        }, { fullWidth: true });
 
         // ASIN validation function
         function validateASIN(asin) {
@@ -2648,11 +2602,6 @@
                 return;
             }
 
-            // Show loading feedback
-            const originalButtonText = goToItemBtn.textContent;
-            goToItemBtn.textContent = '🔄 Opening...';
-            goToItemBtn.disabled = true;
-
             try {
                 // Construct Whole Foods item URL
                 const itemURL = `https://www.wholefoodsmarket.com/name/dp/${cleanASIN}`;
@@ -2671,25 +2620,9 @@
             } catch (error) {
                 console.error('Navigation error:', error);
                 alert('❌ Failed to open item page. Please try again.');
-            } finally {
-                // Restore button state
-                setTimeout(() => {
-                    goToItemBtn.textContent = originalButtonText;
-                    goToItemBtn.disabled = false;
-                }, 1000);
             }
         }
 
-        // Event listeners
-        goToItemBtn.addEventListener('click', () => {
-            const asin = asinInput.value;
-            if (!asin.trim()) {
-                alert('❌ Please enter an ASIN');
-                asinInput.focus();
-                return;
-            }
-            navigateToItem(asin);
-        });
 
         // Allow Enter key to trigger navigation
         asinInput.addEventListener('keypress', (e) => {
@@ -2705,7 +2638,9 @@
 
         asinInputContainer.appendChild(asinInput);
         asinInputContainer.appendChild(goToItemBtn);
-        contentContainer.appendChild(asinInputContainer);
+
+        // SEARCH SECTION
+        const searchHeader = createSectionHeader('Search');
 
         // Item Search Feature
         const itemSearchContainer = document.createElement('div');
@@ -2715,13 +2650,13 @@
         const itemSearchLabel = document.createElement('div');
         itemSearchLabel.textContent = 'Search Items:';
         itemSearchLabel.style.fontSize = '12px';
-        itemSearchLabel.style.color = '#333';
+        itemSearchLabel.style.color = '#212529'; // Improved contrast
         itemSearchLabel.style.marginBottom = '4px';
 
         // Current store display
         const currentStoreDisplayDiv = document.createElement('div');
         currentStoreDisplayDiv.style.fontSize = '11px';
-        currentStoreDisplayDiv.style.color = '#666';
+        currentStoreDisplayDiv.style.color = '#495057'; // Improved contrast
         currentStoreDisplayDiv.style.marginBottom = '4px';
         currentStoreDisplayDiv.style.padding = '4px 8px';
         currentStoreDisplayDiv.style.backgroundColor = '#f8f9fa';
@@ -2745,7 +2680,7 @@
         storeFilterLabel.htmlFor = 'storeFilterCheckbox';
         storeFilterLabel.textContent = 'Filter to current store only';
         storeFilterLabel.style.fontSize = '11px';
-        storeFilterLabel.style.color = '#666';
+        storeFilterLabel.style.color = '#495057'; // Improved contrast
         storeFilterLabel.style.cursor = 'pointer';
 
         storeFilterContainer.appendChild(storeFilterCheckbox);
@@ -2838,7 +2773,7 @@
                 const noResults = document.createElement('div');
                 noResults.textContent = 'No items found';
                 noResults.style.padding = '8px';
-                noResults.style.color = '#666';
+                noResults.style.color = '#495057'; // Improved contrast
                 noResults.style.textAlign = 'center';
                 searchResultsContainer.appendChild(noResults);
                 searchResultsContainer.style.display = 'block';
@@ -2868,8 +2803,8 @@
                 const storeColor = isCurrentStore ? '#00704A' : '#666';
 
                 resultItem.innerHTML = `
-                    <div style="font-weight: bold; color: #007bff;">${item.item_name}</div>
-                    <div style="color: #666;">ASIN: ${item.asin} | SKU: ${item.sku}</div>
+                    <div style="font-weight: bold; color: #00704A;">${item.item_name}</div>
+                    <div style="color: #495057;">ASIN: ${item.asin} | SKU: ${item.sku}</div>
                     <div style="color: ${storeColor};">${storeIndicator}Store: ${item.store_name} (${item.store_tlc})</div>
                 `;
 
@@ -2898,7 +2833,7 @@
                 const moreResults = document.createElement('div');
                 moreResults.textContent = `... and ${results.length - 10} more results`;
                 moreResults.style.padding = '8px';
-                moreResults.style.color = '#666';
+                moreResults.style.color = '#495057'; // Improved contrast
                 moreResults.style.textAlign = 'center';
                 moreResults.style.fontStyle = 'italic';
                 searchResultsContainer.appendChild(moreResults);
@@ -2955,7 +2890,7 @@
                         }
                     } else {
                         currentStoreDisplayDiv.textContent = 'Store info not available';
-                        currentStoreDisplayDiv.style.color = '#666';
+                        currentStoreDisplayDiv.style.color = '#495057'; // Improved contrast
                     }
                 }
             } catch (error) {
@@ -3007,14 +2942,92 @@
         itemSearchContainer.appendChild(searchTypeSelect);
         itemSearchContainer.appendChild(itemSearchInput);
         itemSearchContainer.appendChild(searchResultsContainer);
-        contentContainer.appendChild(itemSearchContainer);
 
-        contentContainer.appendChild(uploadBtn);
+        // TOOLS/SETTINGS SECTION
+        const toolsHeader = createSectionHeader('Tools & Settings');
+        
+        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
+            fileInput.click();
+        });
+
+        const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
+            versionCheckBtn.textContent = '🔄 Checking...';
+            versionCheckBtn.disabled = true;
+            
+            try {
+                await checkForUpdates(true);
+            } catch (error) {
+                console.error('❌ Error in version check button:', error);
+                alert(`❌ Version check failed: ${error.message}`);
+            } finally {
+                versionCheckBtn.textContent = '🔍 Updates';
+                versionCheckBtn.disabled = false;
+            }
+        });
+
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv';
+        fileInput.style.display = 'none';
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                handleCSVUpload(file);
+            }
+            fileInput.value = '';
+        });
+
+        const toolsGroup = createButtonGroup([uploadBtn, versionCheckBtn], 2);
+
+        // Debug info button for troubleshooting
+        const debugBtn = createButton('🐛 Debug Info', '#e83e8c', async () => {
+            const status = await getItemDatabaseStatus();
+            const debugInfo = {
+                timestamp: new Date().toISOString(),
+                url: window.location.href,
+                documentState: document.readyState,
+                panelExists: !!wtsPanel,
+                panelInDOM: wtsPanel ? document.body.contains(wtsPanel) : false,
+                isInitialized: isInitialized,
+                initAttempts: initializationAttempts,
+                networkInterceptionActive: networkInterceptionActive,
+                storeMappings: storeMappingData.size,
+                itemDatabaseCount: status.count,
+                capturedToken: !!getCapturedToken(),
+                storeInfo: getCurrentStoreInfo()
+            };
+
+            console.log('🐛 WTS Tools Debug Info:', debugInfo);
+
+            const debugText = Object.entries(debugInfo)
+                .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
+                .join('\n');
+
+            alert(`🐛 WTS Tools Debug Info:\n\n${debugText}\n\nCheck console for detailed logs.`);
+        }, { fullWidth: true });
+
+        // STORE MANAGEMENT SECTION
+        const storeHeader = createSectionHeader('Store Management');
+
+        // Assemble all content sections
+        contentContainer.appendChild(primaryHeader);
+        contentContainer.appendChild(primaryGroup);
+        
+        contentContainer.appendChild(navigationHeader);
+        contentContainer.appendChild(asinInputContainer);
+        
+        contentContainer.appendChild(searchHeader);
+        contentContainer.appendChild(itemSearchContainer);
+        
+        contentContainer.appendChild(toolsHeader);
+        contentContainer.appendChild(toolsGroup);
+        contentContainer.appendChild(csrfSettingsBtn);
+        contentContainer.appendChild(debugBtn);
+        
+        contentContainer.appendChild(storeHeader);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(itemDatabaseStatusDiv);
-        contentContainer.appendChild(csrfSettingsBtn);
-        contentContainer.appendChild(versionCheckBtn);
-        contentContainer.appendChild(debugBtn);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
@@ -3161,50 +3174,46 @@
             counter.id = 'asin-card-counter';
             counter.style.fontSize = '13px';
             counter.style.color = '#495057';
-            counter.style.marginTop = '12px';
             counter.style.padding = '12px 16px';
             counter.style.borderTop = '1px solid rgba(108, 117, 125, 0.2)';
             counter.style.textAlign = 'center';
             counter.style.background = 'rgba(0, 112, 74, 0.05)';
-            counter.style.borderRadius = '0 0 12px 12px';
+            counter.style.borderRadius = '0 0 10px 10px';
             counter.style.fontWeight = '500';
             counter.style.letterSpacing = '0.3px';
+            counter.style.position = 'relative';
+            counter.style.marginTop = '0';
 
-            // Find the content container and append counter
-            const contentContainer = wtsPanel.querySelector('div:last-child');
-            if (contentContainer) {
-                contentContainer.appendChild(counter);
-                console.log('✅ Counter added to panel');
+            // Append counter directly to the panel (after content container)
+            wtsPanel.appendChild(counter);
+            console.log('✅ Counter added to bottom of panel');
 
-                // FIXED: Properly managed interval with cleanup
-                console.log("🐛 INTERVAL DEBUG - Creating card counter interval with proper cleanup");
-                cardCounterInterval = setInterval(() => {
-                    try {
-                        if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
-                            // Use comprehensive data extraction for counter
-                            const comprehensiveData = extractAllData();
-                            // Total now only counts visible cards, not shovelers
-                            counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards}`;
-                        } else {
-                            console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
-                            if (cardCounterInterval) {
-                                clearInterval(cardCounterInterval);
-                                cardCounterInterval = null;
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error updating counter:', error);
-                        // Clear interval on persistent errors
+            // FIXED: Properly managed interval with cleanup
+            console.log("🐛 INTERVAL DEBUG - Creating card counter interval with proper cleanup");
+            cardCounterInterval = setInterval(() => {
+                try {
+                    if (document.body.contains(counter) && document.body.contains(wtsPanel)) {
+                        // Use comprehensive data extraction for counter
+                        const comprehensiveData = extractAllData();
+                        // Total now only counts visible cards, not shovelers
+                        counter.textContent = `Cards: ${comprehensiveData.totalVisibleASINs} | Shovelers: ${comprehensiveData.totalShovelerASINs} | Total: ${comprehensiveData.totalVisibleASINs} | Empty: ${comprehensiveData.emptyCards}`;
+                    } else {
+                        console.log("🐛 INTERVAL DEBUG - Counter or panel element removed, clearing interval");
                         if (cardCounterInterval) {
                             clearInterval(cardCounterInterval);
                             cardCounterInterval = null;
                         }
                     }
-                }, 1000);
-                console.log("🐛 INTERVAL DEBUG - Card counter interval ID:", cardCounterInterval);
-            } else {
-                console.warn('⚠️ Could not find content container for counter');
-            }
+                } catch (error) {
+                    console.error('Error updating counter:', error);
+                    // Clear interval on persistent errors
+                    if (cardCounterInterval) {
+                        clearInterval(cardCounterInterval);
+                        cardCounterInterval = null;
+                    }
+                }
+            }, 1000);
+            console.log("🐛 INTERVAL DEBUG - Card counter interval ID:", cardCounterInterval);
         } catch (error) {
             console.error('❌ Error adding card counter:', error);
         }
