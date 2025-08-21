@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.019
+// @version      1.3.020
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -124,7 +124,7 @@
     let _initializing = false;
 
     // Version checking variables
-    const CURRENT_VERSION = '1.3.012';
+    const CURRENT_VERSION = '1.3.X';
     const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -2296,18 +2296,6 @@
         statusDiv.style.fontWeight = '500';
         statusDiv.textContent = 'No store mappings loaded';
 
-        // Create status display for item database, disabled
-        // const itemDatabaseStatusDiv = document.createElement('div');
-        // itemDatabaseStatusDiv.style.fontSize = '13px';
-        // itemDatabaseStatusDiv.style.color = '#6c757d';
-        // itemDatabaseStatusDiv.style.textAlign = 'center';
-        // itemDatabaseStatusDiv.style.marginTop = '8px';
-        // itemDatabaseStatusDiv.style.padding = '8px 12px';
-        // itemDatabaseStatusDiv.style.background = 'rgba(0, 112, 74, 0.05)';
-        // itemDatabaseStatusDiv.style.borderRadius = '8px'
-        // itemDatabaseStatusDiv.style.border = '1px solid rgba(0, 112, 74, 0.2)';
-        // itemDatabaseStatusDiv.style.fontWeight = '500';
-        // itemDatabaseStatusDiv.textContent = 'No item database loaded';
 
         // Create CSRF settings button
         const csrfSettingsBtn = document.createElement('button');
@@ -2503,35 +2491,6 @@
             }
         };
 
-        // Function to update item database status using IndexedDB count
-        const updateItemDatabaseStatus = async () => {
-            try {
-                const status = await getItemDatabaseStatus();
-                
-                if (status.count === 0) {
-                    itemDatabaseStatusDiv.textContent = 'No item database loaded';
-                    itemDatabaseStatusDiv.style.color = '#495057'; // Improved contrast
-                    // Only hide search container if it exists
-                    if (typeof itemSearchContainer !== 'undefined') {
-                        itemSearchContainer.style.display = 'none';
-                    }
-                } else {
-                    const ageText = status.ageHours < 1 ? `${Math.round(status.ageHours * 60)}m` : `${status.ageHours.toFixed(1)}h`;
-                    itemDatabaseStatusDiv.textContent = `${status.count.toLocaleString()} items loaded (${ageText} ago)`;
-                    itemDatabaseStatusDiv.style.color = '#00704A';
-                    // Only show search container if it exists
-                    if (typeof itemSearchContainer !== 'undefined') {
-                        itemSearchContainer.style.display = 'block';
-                        // Update current store display when database is loaded
-                        updateCurrentStoreDisplay();
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Error updating database status:', error);
-                itemDatabaseStatusDiv.textContent = 'Database status error';
-                itemDatabaseStatusDiv.style.color = '#721c24'; // Improved contrast for error state
-            }
-        };
 
         // Note: File upload handlers (handleCSVUpload and handleXLSXUpload)
         // automatically update their respective status displays
@@ -3026,7 +2985,6 @@
         
         contentContainer.appendChild(storeHeader);
         contentContainer.appendChild(statusDiv);
-        contentContainer.appendChild(itemDatabaseStatusDiv);
         contentContainer.appendChild(storeSelectContainer);
         contentContainer.appendChild(fileInput);
         document.body.appendChild(panel);
@@ -3034,7 +2992,6 @@
         // Initialize status after all UI elements are created
         loadItemDatabase(); // Legacy compatibility - no longer loads into memory
         updateStatus();
-        updateItemDatabaseStatus();
 
         // Initialize current store display
         updateCurrentStoreDisplay();
