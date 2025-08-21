@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.025
+// @version      1.3.026
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1099,7 +1099,7 @@
             }
 
             let lastExtractedData = [];
-            let storeMappingData = new Map(); // Store mapping: StoreCode -> StoreId
+            let storeMappingData = new Map(); // Store mapping: Acro -> StoreId
             let itemDatabase = []; // Item database from XLSX: Array of item objects
 
         // Load stored mappings from Tampermonkey storage
@@ -2484,9 +2484,9 @@
         switchBtn.style.fontSize = '12px';
 
         switchBtn.addEventListener('click', () => {
-            const selectedStoreCode = storeSelect.value;
-            if (selectedStoreCode) {
-                switchToStore(selectedStoreCode, switchBtn);
+            const selectedAcro = storeSelect.value;
+            if (selectedAcro) {
+                switchToStore(selectedAcro, switchBtn);
             } else {
                 alert('Please select a store to switch to');
             }
