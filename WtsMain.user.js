@@ -124,7 +124,7 @@
     let _initializing = false;
 
     // Version checking variables
-    const CURRENT_VERSION = '1.3.X';
+    const CURRENT_VERSION = '1.3.026';
     const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -1108,8 +1108,8 @@
                 const storedData = GM_getValue('storeMappingData', '{}');
                 const parsedData = JSON.parse(storedData);
                 storeMappingData.clear();
-                Object.entries(parsedData).forEach(([storeCode, storeId]) => {
-                    storeMappingData.set(storeCode, storeId);
+                Object.entries(parsedData).forEach(([acro, storeId]) => {
+                    storeMappingData.set(acro, storeId);
                 });
             } catch (error) {
                 console.error('Error loading stored mappings:', error);
@@ -1537,10 +1537,10 @@
         }
 
         // Store switching functionality
-        async function switchToStore(storeCode, buttonEl) {
-            const storeId = storeMappingData.get(storeCode);
+        async function switchToStore(acro, buttonEl) {
+            const storeId = storeMappingData.get(acro);
             if (!storeId) {
-                alert(`❌ Store code ${storeCode} not found in mappings`);
+                alert(`❌ Store acro ${acro} not found in mappings`);
                 return;
             }
 
@@ -1785,7 +1785,7 @@
 
                 // Check if the request was successful
                 if (response.ok) {
-                    alert(`✅ Successfully switched to store ${storeCode} (ID: ${storeId})`);
+                    alert(`✅ Successfully switched to store ${acro} (ID: ${storeId})`);
 
                     // Wait a moment for the server to process the change, then refresh
                     setTimeout(() => {
@@ -2937,10 +2937,10 @@
             // Sort store codes alphabetically
             const sortedStores = Array.from(storeMappingData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 
-            sortedStores.forEach(([storeCode, storeId]) => {
+            sortedStores.forEach(([acro, storeId]) => {
                 const option = document.createElement('option');
-                option.value = storeCode;
-                option.textContent = `${storeCode} (ID: ${storeId})`;
+                option.value = acro;
+                option.textContent = `${acro} (ID: ${storeId})`;
                 storeSelect.appendChild(option);
             });
         };
