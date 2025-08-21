@@ -7,8 +7,8 @@
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
-// @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
-// @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
+// @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js
+// @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js
 // @match        https://*.wholefoodsmarket.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -125,7 +125,7 @@
 
     // Version checking variables
     const CURRENT_VERSION = '1.3.X';
-    const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js';
+    const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
     // Network request interception to capture CSRF tokens and store info - START IMMEDIATELY
