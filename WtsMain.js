@@ -1818,26 +1818,26 @@
             }
         }
 
-        // File upload handler for CSV store mappings
-        function handleCSVUpload(file) {
+        // File upload handler for XLSX store mappings
+        function handleXLSXUpload(file) {
             if (!file) return;
 
             const fileName = file.name.toLowerCase();
-            if (!fileName.endsWith('.csv')) {
-                alert('Please select a CSV file (.csv extension required)');
+            if (!fileName.endsWith('.xlsx')) {
+                alert('Please select an XLSX file (.xlsx extension required)');
                 return;
             }
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    const csvText = e.target.result;
-                    const newMappings = parseCSV(csvText);
+                    const arrayBuffer = e.target.result;
+                    const newMappings = parseXLSXForStoreMapping(arrayBuffer);
 
                     // Update the store mapping data
                     storeMappingData.clear();
-                    newMappings.forEach((storeId, storeCode) => {
-                        storeMappingData.set(storeCode, storeId);
+                    newMappings.forEach((storeId, acro) => {
+                        storeMappingData.set(acro, storeId);
                     });
 
                     // Save to persistent storage
@@ -1848,15 +1848,15 @@
 
                     alert(`✅ Successfully loaded ${storeMappingData.size} store mappings from ${file.name}`);
                 } catch (error) {
-                    alert(`❌ Error parsing CSV file: ${error.message}`);
+                    alert(`❌ Error parsing XLSX file: ${error.message}`);
                 }
             };
 
             reader.onerror = function() {
-                alert('❌ Error reading CSV file. Please try again.');
+                alert('❌ Error reading XLSX file. Please try again.');
             };
 
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
         }
 
         // SharePoint data refresh functionality is now handled above
