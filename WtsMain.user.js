@@ -124,7 +124,7 @@
     let _initializing = false;
 
     // Version checking variables
-    const CURRENT_VERSION = '1.3.029';
+    const CURRENT_VERSION = '1.3.030';
     const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
