@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.021
+// @version      1.3.022
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -1955,6 +1955,34 @@
         versionBadge.style.fontWeight = '500';
         versionBadge.style.border = '1px solid rgba(255,255,255,0.2)';
 
+        // Create help icon next to version badge
+        const helpIcon = document.createElement('button');
+        helpIcon.textContent = '?';
+        helpIcon.style.background = 'rgba(255,255,255,0.15)';
+        helpIcon.style.border = '1px solid rgba(255,255,255,0.2)';
+        helpIcon.style.borderRadius = '50%';
+        helpIcon.style.color = '#ffffff';
+        helpIcon.style.cursor = 'pointer';
+        helpIcon.style.padding = '4px 8px';
+        helpIcon.style.fontSize = '12px';
+        helpIcon.style.fontWeight = '600';
+        helpIcon.style.width = '24px';
+        helpIcon.style.height = '24px';
+        helpIcon.style.display = 'flex';
+        helpIcon.style.alignItems = 'center';
+        helpIcon.style.justifyContent = 'center';
+        helpIcon.style.transition = 'all 0.2s ease';
+        helpIcon.title = 'Show Help & Usage Instructions';
+
+        helpIcon.addEventListener('mouseenter', () => {
+            helpIcon.style.background = 'rgba(255,255,255,0.25)';
+            helpIcon.style.transform = 'scale(1.05)';
+        });
+        helpIcon.addEventListener('mouseleave', () => {
+            helpIcon.style.background = 'rgba(255,255,255,0.15)';
+            helpIcon.style.transform = 'scale(1)';
+        });
+
         // Create minimize/maximize button
         const minimizeBtn = document.createElement('button');
         minimizeBtn.textContent = isMinimized ? '📋' : '➖';
@@ -2012,10 +2040,17 @@
             headerLeft.appendChild(brandIcon);
             headerLeft.appendChild(headerTitle);
             headerRight.appendChild(versionBadge);
+            headerRight.appendChild(helpIcon);
             headerRight.appendChild(minimizeBtn);
             header.appendChild(headerLeft);
             header.appendChild(headerRight);
         }
+
+        // Add help icon click handler
+        helpIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showHelpModal();
+        });
 
         // Create content container
         const contentContainer = document.createElement('div');
@@ -2617,6 +2652,260 @@
         }
 
         csrfSettingsBtn.addEventListener('click', showCSRFSettings);
+
+        // Comprehensive Help Modal Function
+        function showHelpModal() {
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.backgroundColor = 'rgba(0,0,0,0.6)';
+            modal.style.zIndex = '2147483648';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+            const modalContent = document.createElement('div');
+            modalContent.style.backgroundColor = '#ffffff';
+            modalContent.style.borderRadius = '12px';
+            modalContent.style.boxShadow = '0 12px 40px rgba(0, 112, 74, 0.3)';
+            modalContent.style.maxWidth = '800px';
+            modalContent.style.width = '90%';
+            modalContent.style.maxHeight = '85vh';
+            modalContent.style.display = 'flex';
+            modalContent.style.flexDirection = 'column';
+            modalContent.style.border = '2px solid #00704A';
+            modalContent.style.overflow = 'hidden';
+
+            // Modal Header
+            const modalHeader = document.createElement('div');
+            modalHeader.style.background = 'linear-gradient(135deg, #00704A 0%, #005A3C 100%)';
+            modalHeader.style.color = '#ffffff';
+            modalHeader.style.padding = '20px 24px';
+            modalHeader.style.display = 'flex';
+            modalHeader.style.alignItems = 'center';
+            modalHeader.style.justifyContent = 'space-between';
+            modalHeader.style.borderRadius = '10px 10px 0 0';
+
+            const modalTitle = document.createElement('h2');
+            modalTitle.textContent = '🛒 WTS Tools - Complete Usage Guide';
+            modalTitle.style.margin = '0';
+            modalTitle.style.fontSize = '20px';
+            modalTitle.style.fontWeight = '600';
+            modalTitle.style.letterSpacing = '0.5px';
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '✕';
+            closeButton.style.background = 'rgba(255,255,255,0.15)';
+            closeButton.style.border = '1px solid rgba(255,255,255,0.3)';
+            closeButton.style.borderRadius = '50%';
+            closeButton.style.color = '#ffffff';
+            closeButton.style.cursor = 'pointer';
+            closeButton.style.padding = '8px 12px';
+            closeButton.style.fontSize = '16px';
+            closeButton.style.fontWeight = '600';
+            closeButton.style.width = '36px';
+            closeButton.style.height = '36px';
+            closeButton.style.display = 'flex';
+            closeButton.style.alignItems = 'center';
+            closeButton.style.justifyContent = 'center';
+            closeButton.style.transition = 'all 0.2s ease';
+            closeButton.title = 'Close Help';
+
+            closeButton.addEventListener('mouseenter', () => {
+                closeButton.style.background = 'rgba(255,255,255,0.25)';
+                closeButton.style.transform = 'scale(1.05)';
+            });
+            closeButton.addEventListener('mouseleave', () => {
+                closeButton.style.background = 'rgba(255,255,255,0.15)';
+                closeButton.style.transform = 'scale(1)';
+            });
+
+            modalHeader.appendChild(modalTitle);
+            modalHeader.appendChild(closeButton);
+
+            // Modal Body (Scrollable)
+            const modalBody = document.createElement('div');
+            modalBody.style.padding = '24px';
+            modalBody.style.overflowY = 'auto';
+            modalBody.style.flex = '1';
+            modalBody.style.fontSize = '14px';
+            modalBody.style.lineHeight = '1.6';
+            modalBody.style.color = '#333';
+
+            // Comprehensive Help Content
+            modalBody.innerHTML = `
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">📦 Export Data</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Export ASIN data from visible product cards and carousel shovelers to Excel format.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click the "📦 Export Data" button to extract all visible ASINs and shoveler data.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Output:</strong> Downloads an Excel file with two sheets:</p>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Visible Cards:</strong> ASINs from product cards currently visible on the page</li>
+                        <li><strong>Shoveler Data:</strong> ASINs from carousel/shoveler components with titles and indices</li>
+                    </ul>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Scroll through the page and navigate carousels to capture more ASINs before exporting.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔄 Refresh Data</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Re-scan the current page for updated ASIN data without exporting.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "🔄 Refresh Data" to update the counter and prepare fresh data for export.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>When to use:</strong> After navigating through carousels, scrolling, or when page content changes.</p>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Use this before exporting to ensure you capture the most recent data.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">📁 Upload CSV</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Upload store mapping CSV files to enable store switching functionality.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "📁 Upload CSV" and select a CSV file with StoreCode and StoreId columns.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Required format:</strong></p>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>CSV file with headers: <code style="background: #f8f9fa; padding: 2px 4px; border-radius: 3px;">StoreCode,StoreId</code></li>
+                        <li>StoreCode: 3-character store codes (e.g., "WFM", "ABC")</li>
+                        <li>StoreId: Numeric store identifiers</li>
+                    </ul>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;"><strong>⚠️ Note:</strong> Store mappings are saved locally and persist between sessions.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔍 Updates</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Check for and install script updates from GitHub.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong> Click "🔍 Updates" to manually check for new versions.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Automatic checking:</strong> The script automatically checks for updates every 24 hours.</p>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Updates include bug fixes, new features, and performance improvements.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔗 Go to Item</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Navigate directly to a specific product page using its ASIN.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong></p>
+                    <ol style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>Enter a 10-character ASIN in the input field (e.g., B08N5WRWNW)</li>
+                        <li>Click "🔗 Go to Item" or press Enter</li>
+                        <li>The product page opens in a new tab</li>
+                    </ol>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> ASINs are automatically validated for correct format before navigation.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🔍 Item Search</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Search the loaded item database by ASIN, name, SKU, or store.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong></p>
+                    <ol style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>Select search type from dropdown (All Fields, ASIN, Name, SKU, Store)</li>
+                        <li>Enter search term in the input field</li>
+                        <li>Results appear automatically as you type</li>
+                        <li>Click on any result to navigate to that item</li>
+                    </ol>
+                    <p style="margin: 0 0 8px 0;"><strong>Features:</strong></p>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Store filtering:</strong> Check "Filter to current store only" to limit results</li>
+                        <li><strong>Auto-switching:</strong> Option to switch stores when selecting items from different stores</li>
+                        <li><strong>Current store highlighting:</strong> Items from your current store are highlighted in green</li>
+                    </ul>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;"><strong>⚠️ Note:</strong> Search is only available when an item database is loaded via SharePoint integration.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">⚙️ Settings</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>CSRF Settings:</strong> Configure authentication tokens for store switching.</p>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Network capture:</strong> Automatically captures tokens from browser requests</li>
+                        <li><strong>Fallback token:</strong> Backup token when automatic capture fails</li>
+                        <li><strong>Token validation:</strong> Test token format and clear captured tokens</li>
+                    </ul>
+                    <p style="margin: 0 0 8px 0;"><strong>Debug Info:</strong> View technical information for troubleshooting.</p>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Most users won't need to modify CSRF settings as they're managed automatically.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🏪 Store Management</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Switch between different Whole Foods store locations.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>How to use:</strong></p>
+                    <ol style="margin: 8px 0 0 20px; padding: 0;">
+                        <li>Upload a store mapping CSV file (see Upload CSV section)</li>
+                        <li>Select a store from the dropdown menu</li>
+                        <li>Click "🔄 Switch Store" to change your active store</li>
+                        <li>The page will refresh with the new store context</li>
+                    </ol>
+                    <p style="margin: 0 0 8px 0;"><strong>Current store display:</strong> Shows your currently active store in the search section.</p>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Store switching requires valid CSRF tokens and proper store mappings.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🖱️ Panel Controls</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Drag to move:</strong> Click and drag the header to reposition the panel anywhere on screen.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Minimize/Maximize:</strong> Click the "➖" button to minimize to a side tab, or "📋" to expand.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Responsive design:</strong> Panel automatically adjusts size based on your screen dimensions.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Persistent position:</strong> Panel remembers its minimized state between page loads.</p>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">📊 Live Counter</h3>
+                    <p style="margin: 0 0 8px 0;"><strong>Purpose:</strong> Real-time display of detected ASINs and empty cards on the current page.</p>
+                    <p style="margin: 0 0 8px 0;"><strong>Display format:</strong> "Shovelers: X || Cards: Y | Empty: Z | Total: Y"</p>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Shovelers:</strong> ASINs found in carousel/shoveler components</li>
+                        <li><strong>Cards:</strong> ASINs from visible product cards</li>
+                        <li><strong>Empty:</strong> Empty card slots detected</li>
+                        <li><strong>Total:</strong> Total count of visible card ASINs (excludes shovelers)</li>
+                    </ul>
+                    <p style="margin: 8px 0 0 0; padding: 12px; background: #f0f8f0; border-left: 4px solid #00704A; border-radius: 4px;"><strong>💡 Tip:</strong> Counter updates automatically every second to reflect page changes.</p>
+                </div>
+
+                <div style="margin-bottom: 16px;">
+                    <h3 style="color: #00704A; margin: 0 0 12px 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #00704A; padding-bottom: 8px;">🚀 Best Practices & Tips</h3>
+                    <ul style="margin: 8px 0 0 20px; padding: 0;">
+                        <li><strong>Data Collection:</strong> Scroll through pages and navigate carousels before exporting to capture maximum ASINs</li>
+                        <li><strong>Store Switching:</strong> Always upload current store mappings for accurate store switching</li>
+                        <li><strong>Performance:</strong> The tool handles large datasets efficiently using IndexedDB for item search</li>
+                        <li><strong>Updates:</strong> Keep the script updated for latest features and bug fixes</li>
+                        <li><strong>Troubleshooting:</strong> Use Debug Info in settings if you encounter issues</li>
+                        <li><strong>Browser Compatibility:</strong> Works best in Chrome, Firefox, and Edge with Tampermonkey</li>
+                    </ul>
+                </div>
+
+                <div style="background: linear-gradient(135deg, #00704A 0%, #005A3C 100%); color: white; padding: 16px; border-radius: 8px; text-align: center;">
+                    <p style="margin: 0; font-weight: 600;">🛒 WTS Tools v${CURRENT_VERSION}</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; opacity: 0.9;">Professional ASIN extraction and store management for Whole Foods Market</p>
+                </div>
+            `;
+
+            modalContent.appendChild(modalHeader);
+            modalContent.appendChild(modalBody);
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+
+            // Event handlers
+            const closeModal = () => {
+                document.body.removeChild(modal);
+            };
+
+            closeButton.addEventListener('click', closeModal);
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+
+            // Close on Escape key
+            const handleKeyDown = (e) => {
+                if (e.key === 'Escape') {
+                    closeModal();
+                    document.removeEventListener('keydown', handleKeyDown);
+                }
+            };
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Focus management for accessibility
+            closeButton.focus();
+        }
 
         // Version check button - removed duplicate declaration, using the one from tools section
 
