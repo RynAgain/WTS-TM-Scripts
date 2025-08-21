@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.022
+// @version      1.3.023
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -14,7 +14,7 @@
 // @grant        GM_getValue
 // @grant        GM_deleteValue
 // @grant        GM_xmlhttpRequest
-// @connect      https://github.com
+// @connect      https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.js
 // @require      https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js
 // @require      https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
 // @run-at       document-start
@@ -1131,59 +1131,75 @@
         loadStoredMappings();
 
 
-        // CSV parsing function for store mapping
-        function parseCSV(csvText) {
-            const lines = csvText.trim().split('\n');
-            if (lines.length < 2) {
-                throw new Error('CSV file must contain at least a header row and one data row');
-            }
-
-            const header = lines[0].split(',').map(col => col.trim().replace(/"/g, ''));
-            const storeCodeIndex = header.findIndex(col => col.toLowerCase() === 'storecode');
-            const storeIdIndex = header.findIndex(col => col.toLowerCase() === 'storeid');
-
-            if (storeCodeIndex === -1 || storeIdIndex === -1) {
-                throw new Error('CSV must contain "StoreCode" and "StoreId" columns');
-            }
-
-            const mappings = new Map();
-            const errors = [];
-
-            for (let i = 1; i < lines.length; i++) {
-                const row = lines[i].split(',').map(col => col.trim().replace(/"/g, ''));
-
-                if (row.length < Math.max(storeCodeIndex, storeIdIndex) + 1) {
-                    errors.push(`Row ${i + 1}: Insufficient columns`);
-                    continue;
+        // XLSX parsing function for store mapping
+        function parseXLSXForStoreMapping(arrayBuffer) {
+            try {
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                const sheetName = workbook.SheetNames[0];
+                
+                if (!sheetName) {
+                    throw new Error('No sheets found in XLSX file');
                 }
 
-                const storeCode = row[storeCodeIndex];
-                const storeId = row[storeIdIndex];
+                const worksheet = workbook.Sheets[sheetName];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-                // Validate StoreCode (3 characters)
-                if (!storeCode || storeCode.length !== 3) {
-                    errors.push(`Row ${i + 1}: StoreCode must be exactly 3 characters (got: "${storeCode}")`);
-                    continue;
+                if (jsonData.length < 2) {
+                    throw new Error('XLSX file must contain at least a header row and one data row');
                 }
 
-                // Validate StoreId (numeric)
-                if (!storeId || isNaN(storeId) || !Number.isInteger(Number(storeId))) {
-                    errors.push(`Row ${i + 1}: StoreId must be a valid integer (got: "${storeId}")`);
-                    continue;
+                const header = jsonData[0].map(col => col ? col.toString().trim() : '');
+                const acroIndex = header.findIndex(col => col.toLowerCase() === 'acro');
+                const storeIdIndex = header.findIndex(col => col.toLowerCase() === 'storeid');
+
+                if (acroIndex === -1 || storeIdIndex === -1) {
+                    throw new Error('XLSX must contain "Acro" and "StoreId" columns');
                 }
 
-                mappings.set(storeCode.toUpperCase(), parseInt(storeId, 10));
-            }
+                const mappings = new Map();
+                const errors = [];
 
-            if (errors.length > 0) {
-                throw new Error(`Validation errors:\n${errors.join('\n')}`);
-            }
+                for (let i = 1; i < jsonData.length; i++) {
+                    const row = jsonData[i];
 
-            if (mappings.size === 0) {
-                throw new Error('No valid store mappings found in the file');
-            }
+                    if (!row || row.length < Math.max(acroIndex, storeIdIndex) + 1) {
+                        errors.push(`Row ${i + 1}: Insufficient columns`);
+                        continue;
+                    }
 
-            return mappings;
+                    const acro = row[acroIndex] ? row[acroIndex].toString().trim() : '';
+                    const storeId = row[storeIdIndex] ? row[storeIdIndex].toString().trim() : '';
+
+                    // Validate Acro (3 characters)
+                    if (!acro || acro.length !== 3) {
+                        errors.push(`Row ${i + 1}: Acro must be exactly 3 characters (got: "${acro}")`);
+                        continue;
+                    }
+
+                    // Validate StoreId (numeric)
+                    if (!storeId || isNaN(storeId) || !Number.isInteger(Number(storeId))) {
+                        errors.push(`Row ${i + 1}: StoreId must be a valid integer (got: "${storeId}")`);
+                        continue;
+                    }
+
+                    mappings.set(acro.toUpperCase(), parseInt(storeId, 10));
+                }
+
+                if (errors.length > 0) {
+                    throw new Error(`Validation errors:\n${errors.join('\n')}`);
+                }
+
+                if (mappings.size === 0) {
+                    throw new Error('No valid store mappings found in the file');
+                }
+
+                return mappings;
+            } catch (error) {
+                if (error.message.includes('Unsupported file')) {
+                    throw new Error('Invalid XLSX file format. Please ensure the file is a valid Excel (.xlsx) file.');
+                }
+                throw error;
+            }
         }
 
         // XLSX parsing function with true streaming - never holds full dataset in memory
@@ -2411,7 +2427,7 @@
             lastExtractedData = comprehensiveData;
         });
 
-        const uploadBtn = createButton('📁 Upload CSV', '#00704A', () => {
+        const uploadBtn = createButton('📁 Upload XLSX', '#00704A', () => {
             fileInput.click();
         });
 
@@ -3370,17 +3386,17 @@
             settingsToggleBtn.textContent = '⚙️ Hide Settings';
         }
 
-        // File input for CSV uploads
+        // File input for XLSX uploads
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.accept = '.csv';
+        fileInput.accept = '.xlsx';
         fileInput.style.display = 'none';
         fileInput.style.cursor = 'pointer'; // Ensure file input has pointer cursor when visible
 
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) {
-                handleCSVUpload(file);
+                handleXLSXUpload(file);
             }
             fileInput.value = '';
         });
