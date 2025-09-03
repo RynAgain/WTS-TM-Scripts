@@ -6,9 +6,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder",
-    "install-playwright": "npx playwright install",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "electron-builder --win",
+    "postinstall": "echo Skipping Playwright browser download (Route B: download on first run)"
   },
   "keywords": [
     "electron",
@@ -42,40 +41,22 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
           "arch": ["x64"]
         },
         {
-          "target": "dir",
-          "arch": ["x64"]
-        }
-      ]
-    },
-    "mac": {
-      "target": [
-        {
-          "target": "dmg",
-          "arch": ["x64", "arm64"]
-        },
-        {
-          "target": "dir",
-          "arch": ["x64", "arm64"]
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        {
-          "target": "AppImage",
+          "target": "portable",
           "arch": ["x64"]
         },
         {
           "target": "dir",
           "arch": ["x64"]
         }
-      ]
+      ],
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
@@ -85,6 +66,7 @@
     },
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
-    "npmRebuild": false
+    "npmRebuild": false,
+    "forceCodeSigning": false
   }
 }
