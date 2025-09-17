@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Whole Foods ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
-// @version      1.3.031
+// @version      1.3.032
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
 // @author       WTS-TM-Scripts
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
@@ -124,7 +124,7 @@
     let _initializing = false;
 
     // Version checking variables
-    const CURRENT_VERSION = '1.3.031';
+    const CURRENT_VERSION = '1.3.032';
     const GITHUB_VERSION_URL = 'https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js';
     const VERSION_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -3027,8 +3027,8 @@
             }
 
             try {
-                // Construct Whole Foods item URL
-                const itemURL = `https://www.wholefoodsmarket.com/name/dp/${cleanASIN}`;
+                // Construct Whole Foods item URL with new required parameters
+                const itemURL = `https://www.wholefoodsmarket.com/name/dp/${cleanASIN}?pd_rd_i=${cleanASIN}&fpw=alm&almBrandId=aNHVc2Akvg`;
 
                 // Open in new tab
                 window.open(itemURL, '_blank');
@@ -3324,7 +3324,7 @@
         }
 
         function navigateToItemWithContext(item) {
-            const itemURL = `https://www.wholefoodsmarket.com/name/dp/${item.asin}`;
+            const itemURL = `https://www.wholefoodsmarket.com/name/dp/${item.asin}?pd_rd_i=${item.asin}&fpw=alm&almBrandId=aNHVc2Akvg`;
             window.open(itemURL, '_blank');
 
             // Clear search

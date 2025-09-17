@@ -108,7 +108,7 @@ class ExcelExporter {
                 loadTime: result.loadTime || '',
                 error: result.error || '',
                 timestamp: new Date(result.timestamp).toLocaleString(),
-                url: `https://www.wholefoodsmarket.com/name/dp/${result.asin}`
+                url: `https://www.wholefoodsmarket.com/name/dp/${result.asin}?pd_rd_i=${result.asin}&fpw=alm&almBrandId=aNHVc2Akvg`
             });
             
             // Color code rows based on success/failure
@@ -168,8 +168,8 @@ class ExcelExporter {
             
             // Make URL clickable
             row.getCell('url').value = {
-                text: `https://www.wholefoodsmarket.com/name/dp/${result.asin}`,
-                hyperlink: `https://www.wholefoodsmarket.com/name/dp/${result.asin}`
+                text: `https://www.wholefoodsmarket.com/name/dp/${result.asin}?pd_rd_i=${result.asin}&fpw=alm&almBrandId=aNHVc2Akvg`,
+                hyperlink: `https://www.wholefoodsmarket.com/name/dp/${result.asin}?pd_rd_i=${result.asin}&fpw=alm&almBrandId=aNHVc2Akvg`
             };
             row.getCell('url').font = { color: { argb: '0563C1' }, underline: true };
         });

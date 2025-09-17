@@ -1406,8 +1406,8 @@ class ScannerService {
             
             console.log(`🤖 ${agent.id} processing: ${storeCode} - ${item.asin}`);
             
-            // Construct item URL
-            const itemUrl = `https://www.wholefoodsmarket.com/name/dp/${item.asin}`;
+            // Construct item URL with new required parameters
+            const itemUrl = `https://www.wholefoodsmarket.com/name/dp/${item.asin}?pd_rd_i=${item.asin}&fpw=alm&almBrandId=aNHVc2Akvg`;
             
             // Navigate to item page
             const response = await agent.page.goto(itemUrl, {
@@ -2345,8 +2345,8 @@ class ScannerService {
         try {
             console.log(`🔍 Processing item: ${item.store} - ${item.asin}`);
             
-            // Construct item URL
-            const itemUrl = `https://www.wholefoodsmarket.com/name/dp/${item.asin}`;
+            // Construct item URL with new required parameters
+            const itemUrl = `https://www.wholefoodsmarket.com/name/dp/${item.asin}?pd_rd_i=${item.asin}&fpw=alm&almBrandId=aNHVc2Akvg`;
             
             // Navigate to item page
             const response = await this.page.goto(itemUrl, {
