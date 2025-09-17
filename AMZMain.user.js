@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Whole Foods ASIN Exporter with Store Mapping
+// @name         AMZs ASIN Exporter with Store Mapping
 // @namespace    http://tampermonkey.net/
 // @version      1.3.032
 // @description  Export ASIN, Name, Section from visible cards on Whole Foods page with store mapping and SharePoint item database functionality
@@ -7,9 +7,8 @@
 // @homepage     https://github.com/RynAgain/WTS-TM-Scripts
 // @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
 // @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
-// @updateURL    https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js
-// @downloadURL  https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js
-// @match        https://*.wholefoodsmarket.com/*
+
+// @match        https://*.Amazon.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -369,16 +368,16 @@
     async function checkForUpdates(showNoUpdateMessage = false) {
         try {
             console.log('🔍 Checking for script updates...');
-            
+
             const lastCheck = GM_getValue('lastVersionCheck', 0);
             const now = Date.now();
-            
+
             // Don't check too frequently unless explicitly requested
             if (!showNoUpdateMessage && (now - lastCheck) < VERSION_CHECK_INTERVAL) {
                 console.log('⏭️ Version check skipped - checked recently');
                 return;
             }
-            
+
             // Use GM_xmlhttpRequest to bypass CORS restrictions
             return new Promise((resolve, reject) => {
                 GM_xmlhttpRequest({
@@ -393,22 +392,22 @@
                             if (response.status !== 200) {
                                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                             }
-                            
+
                             const scriptContent = response.responseText;
-                            
+
                             // Extract version from the script content
                             const versionMatch = scriptContent.match(/@version\s+([^\s]+)/);
                             if (!versionMatch) {
                                 throw new Error('Could not extract version from GitHub script');
                             }
-                            
+
                             const latestVersion = versionMatch[1].trim();
                             console.log(`📋 Current version: ${CURRENT_VERSION}`);
                             console.log(`📋 Latest version: ${latestVersion}`);
-                            
+
                             // Update last check timestamp
                             GM_setValue('lastVersionCheck', now);
-                            
+
                             // Compare versions
                             if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
                                 console.log('🆕 New version available!');
@@ -419,7 +418,7 @@
                                     alert(`✅ You're running the latest version!\n\nCurrent: ${CURRENT_VERSION}\nLatest: ${latestVersion}`);
                                 }
                             }
-                            
+
                             resolve();
                         } catch (error) {
                             console.error('❌ Error processing version check response:', error);
@@ -448,7 +447,7 @@
                     timeout: 10000 // 10 second timeout
                 });
             });
-            
+
         } catch (error) {
             console.error('❌ Error checking for updates:', error);
             if (showNoUpdateMessage) {
@@ -456,17 +455,17 @@
             }
         }
     }
-    
+
     function isNewerVersion(latest, current) {
         // Simple version comparison - assumes format like "1.3.012"
         const latestParts = latest.split('.').map(part => parseInt(part, 10));
         const currentParts = current.split('.').map(part => parseInt(part, 10));
-        
+
         // Pad arrays to same length
         const maxLength = Math.max(latestParts.length, currentParts.length);
         while (latestParts.length < maxLength) latestParts.push(0);
         while (currentParts.length < maxLength) currentParts.push(0);
-        
+
         // Compare each part
         for (let i = 0; i < maxLength; i++) {
             if (latestParts[i] > currentParts[i]) {
@@ -475,10 +474,10 @@
                 return false;
             }
         }
-        
+
         return false; // Versions are equal
     }
-    
+
     function showUpdateNotification(latestVersion) {
         const updateModal = document.createElement('div');
         updateModal.style.position = 'fixed';
@@ -492,7 +491,7 @@
         updateModal.style.alignItems = 'center';
         updateModal.style.justifyContent = 'center';
         updateModal.style.fontFamily = 'sans-serif';
-        
+
         const modalContent = document.createElement('div');
         modalContent.style.backgroundColor = '#fff';
         modalContent.style.padding = '30px';
@@ -502,7 +501,7 @@
         modalContent.style.width = '90%';
         modalContent.style.textAlign = 'center';
         modalContent.style.border = '3px solid #28a745';
-        
+
         modalContent.innerHTML = `
             <div style="font-size: 48px; margin-bottom: 20px;">🆕</div>
             <h2 style="margin: 0 0 15px 0; color: #28a745; font-size: 24px;">Update Available!</h2>
@@ -552,40 +551,40 @@
                 Updates include bug fixes, new features, and improvements.
             </p>
         `;
-        
+
         updateModal.appendChild(modalContent);
         document.body.appendChild(updateModal);
-        
+
         // Add hover effects
         const updateBtn = document.getElementById('updateNowBtn');
         const remindBtn = document.getElementById('remindLaterBtn');
         const skipBtn = document.getElementById('skipVersionBtn');
-        
+
         updateBtn.addEventListener('mouseenter', () => {
             updateBtn.style.backgroundColor = '#218838';
         });
         updateBtn.addEventListener('mouseleave', () => {
             updateBtn.style.backgroundColor = '#28a745';
         });
-        
+
         // Event handlers
         updateBtn.addEventListener('click', () => {
             window.open('https://raw.githubusercontent.com/RynAgain/WTS-TM-Scripts/main/WtsMain.user.js', '_blank');
             document.body.removeChild(updateModal);
         });
-        
+
         remindBtn.addEventListener('click', () => {
             // Reset last check time to allow checking again sooner
             GM_setValue('lastVersionCheck', 0);
             document.body.removeChild(updateModal);
         });
-        
+
         skipBtn.addEventListener('click', () => {
             // Mark this version as skipped
             GM_setValue('skippedVersion', latestVersion);
             document.body.removeChild(updateModal);
         });
-        
+
         // Close on background click
         updateModal.addEventListener('click', (e) => {
             if (e.target === updateModal) {
@@ -593,26 +592,26 @@
             }
         });
     }
-    
+
     function startVersionChecking() {
         console.log('🔍 Starting automatic version checking...');
-        
+
         // Check immediately on startup (but don't show "no update" message)
         setTimeout(() => {
             checkForUpdates(false);
         }, 5000); // Wait 5 seconds after startup
-        
+
         // Set up periodic checking
         versionCheckInterval = setInterval(() => {
             checkForUpdates(false);
         }, VERSION_CHECK_INTERVAL);
-        
+
         console.log('✅ Version checking initialized');
     }
 
     // Start network interception immediately
     startNetworkInterception();
-    
+
     // Start version checking
     startVersionChecking();
 
@@ -636,16 +635,16 @@
     // Enhanced carousel data extraction from JSON without navigation
     function extractShovelerCarousels() {
         console.log('🎠 Starting shoveler carousel extraction from JSON data...');
-        
+
         const carousels = document.querySelectorAll('[data-a-carousel-options]');
         console.log(`🎠 Found ${carousels.length} carousels with data-a-carousel-options`);
-        
+
         const shovelerData = [];
-        
+
         for (let i = 0; i < carousels.length; i++) {
             const carousel = carousels[i];
             console.log(`🎠 Processing carousel ${i + 1}/${carousels.length}`);
-            
+
             try {
                 const carouselData = extractCarouselData(carousel, i);
                 if (carouselData && carouselData.asins.length > 0) {
@@ -655,7 +654,7 @@
                 console.error(`❌ Error processing carousel ${i + 1}:`, error);
             }
         }
-        
+
         console.log(`✅ Extracted data from ${shovelerData.length} shovelers`);
         return shovelerData;
     }
@@ -667,13 +666,13 @@
             console.log(`⚠️ Carousel ${index + 1}: No carousel options found`);
             return null;
         }
-        
+
         console.log(`🎠 Carousel ${index + 1}: Extracting data from options`);
-        
+
         // Find carousel title
         const carouselContainer = carousel.closest('[data-cel-widget]') || carousel.closest('.a-carousel-container') || carousel.parentElement;
         let title = 'Unknown Shoveler';
-        
+
         if (carouselContainer) {
             // Look for title in various locations
             const titleSelectors = [
@@ -682,7 +681,7 @@
                 '[data-testid*="title"]',
                 '.s-size-large', '.s-size-medium'
             ];
-            
+
             for (const selector of titleSelectors) {
                 const titleElement = carouselContainer.querySelector(selector);
                 if (titleElement && titleElement.textContent.trim()) {
@@ -691,20 +690,20 @@
                 }
             }
         }
-        
+
         // Clean title
         title = cleanCarouselTitle(title);
-        
+
         // Extract ASINs using comprehensive parsing
         const asins = extractASINsFromCarouselOptions(carouselOptions, index);
-        
+
         if (asins.length === 0) {
             console.log(`⚠️ Carousel ${index + 1}: No ASINs extracted`);
             return null;
         }
-        
+
         console.log(`✅ Carousel ${index + 1}: "${title}" - ${asins.length} ASINs`);
-        
+
         return {
             title: title,
             asinCount: asins.length,
@@ -716,7 +715,7 @@
     // Clean carousel titles
     function cleanCarouselTitle(title) {
         if (!title) return 'Unknown Shoveler';
-        
+
         // Remove common unwanted phrases
         const cleanPatterns = [
             /\s*see\s+more\s*/gi,
@@ -730,19 +729,19 @@
             /\s*more\s+items?\s*/gi,
             /\s*additional\s+items?\s*/gi
         ];
-        
+
         let cleaned = title;
         cleanPatterns.forEach(pattern => {
             cleaned = cleaned.replace(pattern, '');
         });
-        
+
         return cleaned.trim() || 'Unknown Shoveler';
     }
 
     // Comprehensive ASIN extraction from carousel options
     function extractASINsFromCarouselOptions(carouselOptions, carouselIndex) {
         console.log(`🔍 Carousel ${carouselIndex + 1}: Starting comprehensive ASIN extraction`);
-        
+
         let parsedOptions = null;
         try {
             parsedOptions = JSON.parse(carouselOptions);
@@ -751,9 +750,9 @@
             console.error(`❌ Carousel ${carouselIndex + 1}: Failed to parse JSON:`, error);
             return [];
         }
-        
+
         const allAsins = new Set();
-        
+
         // Method 1: Direct id_list in root
         if (parsedOptions.id_list && Array.isArray(parsedOptions.id_list)) {
             console.log(`🎯 Carousel ${carouselIndex + 1}: Method 1 - Found id_list in root (${parsedOptions.id_list.length} items)`);
@@ -763,12 +762,12 @@
             });
             console.log(`✅ Carousel ${carouselIndex + 1}: Method 1 extracted ${allAsins.size} ASINs`);
         }
-        
+
         // Method 2: Ajax parameters
         if (parsedOptions.ajax && parsedOptions.ajax.params) {
             console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2 - Checking ajax parameters`);
             const params = parsedOptions.ajax.params;
-            
+
             if (params.id_list && Array.isArray(params.id_list)) {
                 console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2a - Found ajax.params.id_list (${params.id_list.length} items)`);
                 params.id_list.forEach(item => {
@@ -776,7 +775,7 @@
                     if (asin) allAsins.add(asin);
                 });
             }
-            
+
             if (params.asins && Array.isArray(params.asins)) {
                 console.log(`🎯 Carousel ${carouselIndex + 1}: Method 2b - Found ajax.params.asins (${params.asins.length} items)`);
                 params.asins.forEach(item => {
@@ -784,24 +783,24 @@
                     if (asin) allAsins.add(asin);
                 });
             }
-            
+
             console.log(`✅ Carousel ${carouselIndex + 1}: Method 2 total ASINs: ${allAsins.size}`);
         }
-        
+
         // Method 3: Exhaustive array search
         console.log(`🎯 Carousel ${carouselIndex + 1}: Method 3 - Exhaustive array search`);
         const arrays = findAllArraysInObject(parsedOptions, 15);
         console.log(`🔍 Carousel ${carouselIndex + 1}: Found ${arrays.length} arrays in JSON structure`);
-        
+
         let bestArray = null;
         let bestScore = 0;
-        
+
         arrays.forEach((arr, index) => {
             if (!Array.isArray(arr) || arr.length === 0) return;
-            
+
             let asinCount = 0;
             const tempAsins = new Set();
-            
+
             arr.forEach(item => {
                 const asin = extractASINFromItem(item);
                 if (asin) {
@@ -809,17 +808,17 @@
                     asinCount++;
                 }
             });
-            
+
             const score = asinCount;
             console.log(`🔍 Carousel ${carouselIndex + 1}: Array ${index + 1} - ${arr.length} items, ${asinCount} ASINs, score: ${score}`);
-            
+
             if (score > bestScore) {
                 bestScore = score;
                 bestArray = arr;
                 console.log(`🏆 Carousel ${carouselIndex + 1}: New best array found with score ${score}`);
             }
         });
-        
+
         if (bestArray) {
             console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 - Processing best array with ${bestArray.length} items`);
             bestArray.forEach(item => {
@@ -827,32 +826,32 @@
                 if (asin) allAsins.add(asin);
             });
         }
-        
+
         console.log(`✅ Carousel ${carouselIndex + 1}: Method 3 total ASINs: ${allAsins.size}`);
-        
+
         // Method 4: Regex extraction from JSON string
         console.log(`🎯 Carousel ${carouselIndex + 1}: Method 4 - Regex extraction from JSON string`);
         const jsonString = JSON.stringify(parsedOptions);
-        
+
         // Primary ASIN pattern (10 characters)
         const primaryPattern = /\b[A-Z0-9]{10}\b/g;
         const primaryMatches = [...jsonString.matchAll(primaryPattern)];
         console.log(`🔍 Carousel ${carouselIndex + 1}: Primary pattern found ${primaryMatches.length} potential ASINs`);
-        
+
         primaryMatches.forEach(match => {
             const asin = match[0];
             if (isValidASIN(asin)) {
                 allAsins.add(asin);
             }
         });
-        
+
         // Fallback pattern (8-15 characters) if primary didn't find enough
         if (allAsins.size < 5) {
             console.log(`🔍 Carousel ${carouselIndex + 1}: Using fallback pattern (8-15 chars)`);
             const fallbackPattern = /\b[A-Z0-9]{8,15}\b/g;
             const fallbackMatches = [...jsonString.matchAll(fallbackPattern)];
             console.log(`🔍 Carousel ${carouselIndex + 1}: Fallback pattern found ${fallbackMatches.length} potential ASINs`);
-            
+
             fallbackMatches.forEach(match => {
                 const asin = match[0];
                 if (isValidASIN(asin)) {
@@ -860,33 +859,33 @@
                 }
             });
         }
-        
+
         console.log(`✅ Carousel ${carouselIndex + 1}: Method 4 total ASINs: ${allAsins.size}`);
-        
+
         // Method 5: Raw string extraction as last resort
         if (allAsins.size === 0) {
             console.log(`🎯 Carousel ${carouselIndex + 1}: Method 5 - Raw string extraction (last resort)`);
             const rawPattern = /\b[A-Z0-9]{10}\b/g;
             const rawMatches = [...carouselOptions.matchAll(rawPattern)];
             console.log(`🔍 Carousel ${carouselIndex + 1}: Raw string found ${rawMatches.length} potential ASINs`);
-            
+
             rawMatches.forEach(match => {
                 const asin = match[0];
                 if (isValidASIN(asin)) {
                     allAsins.add(asin);
                 }
             });
-            
+
             console.log(`✅ Carousel ${carouselIndex + 1}: Method 5 total ASINs: ${allAsins.size}`);
         }
-        
+
         const finalAsins = Array.from(allAsins);
         console.log(`🎉 Carousel ${carouselIndex + 1}: Final extraction complete - ${finalAsins.length} unique ASINs`);
-        
+
         if (finalAsins.length > 0) {
             console.log(`📋 Carousel ${carouselIndex + 1}: Sample ASINs:`, finalAsins.slice(0, 5));
         }
-        
+
         return finalAsins;
     }
 
@@ -895,20 +894,20 @@
         if (currentDepth >= maxDepth || !obj || typeof obj !== 'object') {
             return [];
         }
-        
+
         // Prevent infinite loops with circular references
         if (visited.has(obj)) {
             return [];
         }
         visited.add(obj);
-        
+
         const arrays = [];
-        
+
         try {
             if (Array.isArray(obj)) {
                 arrays.push(obj);
             }
-            
+
             for (const key in obj) {
                 if (obj.hasOwnProperty && obj.hasOwnProperty(key)) {
                     const value = obj[key];
@@ -923,7 +922,7 @@
         } catch (error) {
             console.error('Error traversing object:', error);
         }
-        
+
         visited.delete(obj);
         return arrays;
     }
@@ -931,16 +930,16 @@
     // Helper function to extract ASIN from various item formats
     function extractASINFromItem(item) {
         if (!item) return null;
-        
+
         // If item is already a string and looks like an ASIN
         if (typeof item === 'string') {
             return isValidASIN(item) ? item : null;
         }
-        
+
         // If item is an object, look for ASIN in various properties
         if (typeof item === 'object') {
             const asinProperties = ['asin', 'ASIN', 'id', 'ID', 'itemId', 'productId'];
-            
+
             for (const prop of asinProperties) {
                 if (item[prop] && typeof item[prop] === 'string') {
                     const asin = item[prop];
@@ -950,35 +949,35 @@
                 }
             }
         }
-        
+
         return null;
     }
 
     // Helper function to validate ASIN format
     function isValidASIN(asin) {
         if (!asin || typeof asin !== 'string') return false;
-        
+
         // Standard ASIN: 10 alphanumeric characters
         if (/^[A-Z0-9]{10}$/i.test(asin)) return true;
-        
+
         // Extended validation: 8-15 alphanumeric characters (for flexibility)
         if (/^[A-Z0-9]{8,15}$/i.test(asin)) return true;
-        
+
         return false;
     }
 
     // Enhanced data extraction that combines visible cards and carousel data
     function extractAllData() {
         console.log('🚀 Starting comprehensive data extraction...');
-        
+
         // Extract visible cards (existing functionality)
         const cardData = extractDataFromCards();
         console.log(`📦 Visible cards: ${cardData.data.length} ASINs, ${cardData.emptyCount} empty cards`);
-        
+
         // Extract carousel/shoveler data (new functionality)
         const shovelerData = extractShovelerCarousels();
         console.log(`🎠 Shoveler data: ${shovelerData.length} carousels`);
-        
+
         // Combine data
         const combinedData = {
             visibleCards: cardData.data,
@@ -988,21 +987,21 @@
             totalShovelerASINs: shovelerData.reduce((sum, shoveler) => sum + shoveler.asinCount, 0),
             totalShovelers: shovelerData.length
         };
-        
+
         console.log('✅ Comprehensive data extraction complete:', {
             visibleASINs: combinedData.totalVisibleASINs,
             shovelerASINs: combinedData.totalShovelerASINs,
             totalShovelers: combinedData.totalShovelers,
             totalASINsExcludingShovelers: combinedData.totalVisibleASINs // Only count visible cards in total
         });
-        
+
         return combinedData;
     }
 
     // Enhanced XLSX download function that creates separate sheets for visible cards and shoveler data
     function downloadXLSX(combinedData) {
         console.log('📦 Starting XLSX export with separate sheets...');
-        
+
         // If legacy format (array of rows), convert to new format
         if (Array.isArray(combinedData) && combinedData.length > 0 && combinedData[0].ASIN) {
             console.log('📦 Converting legacy format to new format');
@@ -1015,18 +1014,18 @@
                 totalShovelers: 0
             };
         }
-        
+
         // Create workbook
         const workbook = XLSX.utils.book_new();
-        
+
         // Sheet 1: Visible Cards
         const visibleCardsData = [];
         if (combinedData.visibleCards && combinedData.visibleCards.length > 0) {
             console.log(`📦 Adding ${combinedData.visibleCards.length} visible cards to Visible Cards sheet`);
-            
+
             // Add headers
             visibleCardsData.push(['ASIN', 'Name', 'Section']);
-            
+
             // Add data rows
             combinedData.visibleCards.forEach(card => {
                 visibleCardsData.push([
@@ -1039,18 +1038,18 @@
             // Add headers even if no data
             visibleCardsData.push(['ASIN', 'Name', 'Section']);
         }
-        
+
         const visibleCardsSheet = XLSX.utils.aoa_to_sheet(visibleCardsData);
         XLSX.utils.book_append_sheet(workbook, visibleCardsSheet, 'Visible Cards');
-        
+
         // Sheet 2: Shoveler Data
         const shovelerData = [];
         if (combinedData.shovelers && combinedData.shovelers.length > 0) {
             console.log(`📦 Adding ${combinedData.shovelers.length} shovelers to Shoveler Data sheet`);
-            
+
             // Add headers
             shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
-            
+
             // Add data rows
             combinedData.shovelers.forEach(shoveler => {
                 if (shoveler.asins && shoveler.asins.length > 0) {
@@ -1069,10 +1068,10 @@
             // Add headers even if no data
             shovelerData.push(['ASIN', 'Name', 'Section', 'ShovelerTitle', 'ShovelerIndex']);
         }
-        
+
         const shovelerSheet = XLSX.utils.aoa_to_sheet(shovelerData);
         XLSX.utils.book_append_sheet(workbook, shovelerSheet, 'Shoveler Data');
-        
+
         // Generate and download the file
         const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1082,7 +1081,7 @@
         a.download = 'wholefoods_data_separated.xlsx';
         a.click();
         URL.revokeObjectURL(url);
-        
+
         console.log(`✅ XLSX export complete with separate sheets`);
         console.log(`📊 Export summary: ${combinedData.totalVisibleASINs} visible ASINs (Visible Cards sheet), ${combinedData.totalShovelerASINs} shoveler ASINs (Shoveler Data sheet)`);
     }
@@ -1136,7 +1135,7 @@
             try {
                 const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                 const sheetName = workbook.SheetNames[0];
-                
+
                 if (!sheetName) {
                     throw new Error('No sheets found in XLSX file');
                 }
@@ -1364,7 +1363,7 @@
 
                 const processingTime = (Date.now() - startTime) / 1000;
                 console.log(`✅ Streamed ${savedCount.toLocaleString()} items to IndexedDB in ${processingTime.toFixed(2)} seconds`);
-                
+
                 if (errorCount > 0) {
                     console.warn(`⚠️ Skipped ${errorCount} rows due to validation errors`);
                 }
@@ -1401,7 +1400,7 @@
                 for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
                     const startIdx = batchIndex * BATCH_SIZE;
                     const endIdx = Math.min(startIdx + BATCH_SIZE, items.length);
-                    
+
                     // Process batch without storing in memory
                     const batch = [];
                     for (let i = startIdx; i < endIdx; i++) {
@@ -1430,9 +1429,9 @@
 
                     await db.items.bulkAdd(batch);
                     savedCount += batch.length;
-                    
+
                     console.log(`📦 Streamed batch ${batchIndex + 1}/${totalBatches} (${savedCount.toLocaleString()}/${items.length.toLocaleString()} items)`);
-                    
+
                     // Allow UI to breathe between batches
                     if (batchIndex % 10 === 0) {
                         await new Promise(resolve => setTimeout(resolve, 10));
@@ -1463,7 +1462,7 @@
             try {
                 const count = await db.items.count();
                 const timestamp = GM_getValue('itemDatabaseTimestamp', 0);
-                
+
                 return {
                     count,
                     timestamp,
@@ -1878,7 +1877,7 @@
         panel.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         panel.style.userSelect = 'none';
         // Remove cursor: 'move' from panel - will be added only to header
-        
+
         // Set initial size based on minimized state with responsive sizing
         if (isMinimized) {
             // Minimized state: improved left-side tab
@@ -1895,10 +1894,10 @@
             // Responsive sizing that adapts to viewport
             const viewportWidth = window.innerWidth;
             const viewportHeight = window.innerHeight;
-            
+
             // Calculate responsive width (20-25% of viewport, with min/max constraints)
             const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
-            
+
             panel.style.width = `${responsiveWidth}px`;
             panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
             panel.style.minWidth = '320px';
@@ -1922,7 +1921,7 @@
         header.style.color = '#ffffff';
         header.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
         header.style.cursor = 'move'; // Add drag cursor only to header
-        
+
         // Special styling for minimized state
         if (isMinimized) {
             header.style.flexDirection = 'column';
@@ -1952,7 +1951,7 @@
         headerTitle.style.letterSpacing = '0.5px';
         headerTitle.style.textAlign = 'center';
         headerTitle.style.lineHeight = isMinimized ? '1.2' : 'normal';
-        
+
         // Hide title in minimized state to save space
         if (isMinimized) {
             headerTitle.style.display = 'none';
@@ -2032,7 +2031,7 @@
             minimizedContent.style.justifyContent = 'center';
             minimizedContent.style.height = '100%';
             minimizedContent.style.gap = '12px';
-            
+
             const minimizedTitle = document.createElement('div');
             minimizedTitle.textContent = 'WTS';
             minimizedTitle.style.fontSize = '14px';
@@ -2040,7 +2039,7 @@
             minimizedTitle.style.color = '#ffffff';
             minimizedTitle.style.textAlign = 'center';
             minimizedTitle.style.letterSpacing = '1px';
-            
+
             const minimizedSubtitle = document.createElement('div');
             minimizedSubtitle.textContent = 'TOOLS';
             minimizedSubtitle.style.fontSize = '10px';
@@ -2048,7 +2047,7 @@
             minimizedSubtitle.style.color = 'rgba(255,255,255,0.8)';
             minimizedSubtitle.style.textAlign = 'center';
             minimizedSubtitle.style.letterSpacing = '0.5px';
-            
+
             minimizedContent.appendChild(minimizedTitle);
             minimizedContent.appendChild(minimizedSubtitle);
             minimizedContent.appendChild(minimizeBtn);
@@ -2082,16 +2081,16 @@
         // Minimize/Maximize functionality
         const toggleMinimize = () => {
             const currentlyMinimized = contentContainer.style.display === 'none';
-            
+
             if (currentlyMinimized) {
                 // Expand from left-side tab
                 contentContainer.style.display = 'flex';
-                
+
                 // Recalculate responsive dimensions
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
                 const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
-                
+
                 panel.style.left = 'auto';
                 panel.style.top = '20px';
                 panel.style.right = '20px';
@@ -2103,42 +2102,42 @@
                 panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
                 panel.style.borderRadius = '12px';
                 panel.style.boxShadow = '0 8px 24px rgba(0, 112, 74, 0.15)';
-                
+
                 // Restore normal header layout
                 header.style.flexDirection = 'row';
                 header.style.justifyContent = 'space-between';
                 header.style.padding = '12px 16px';
                 header.style.height = 'auto';
                 header.style.borderRadius = '10px 10px 0 0';
-                
+
                 // Rebuild header content for normal state
                 header.innerHTML = '';
-                
+
                 // Recreate header left section
                 const newHeaderLeft = document.createElement('div');
                 newHeaderLeft.style.display = 'flex';
                 newHeaderLeft.style.alignItems = 'center';
                 newHeaderLeft.style.gap = '12px';
-                
+
                 const newBrandIcon = document.createElement('span');
                 newBrandIcon.textContent = '🛒';
                 newBrandIcon.style.fontSize = '18px';
-                
+
                 const newHeaderTitle = document.createElement('span');
                 newHeaderTitle.textContent = 'WTS Tools';
                 newHeaderTitle.style.fontSize = '16px';
                 newHeaderTitle.style.fontWeight = '600';
                 newHeaderTitle.style.letterSpacing = '0.5px';
-                
+
                 newHeaderLeft.appendChild(newBrandIcon);
                 newHeaderLeft.appendChild(newHeaderTitle);
-                
+
                 // Recreate header right section
                 const newHeaderRight = document.createElement('div');
                 newHeaderRight.style.display = 'flex';
                 newHeaderRight.style.alignItems = 'center';
                 newHeaderRight.style.gap = '8px';
-                
+
                 const newVersionBadge = document.createElement('span');
                 newVersionBadge.textContent = `v${CURRENT_VERSION}`;
                 newVersionBadge.style.fontSize = '11px';
@@ -2148,7 +2147,7 @@
                 newVersionBadge.style.color = '#ffffff';
                 newVersionBadge.style.fontWeight = '500';
                 newVersionBadge.style.border = '1px solid rgba(255,255,255,0.2)';
-                
+
                 // Update minimize button for normal state
                 minimizeBtn.textContent = '➖';
                 minimizeBtn.title = 'Minimize Panel';
@@ -2157,13 +2156,13 @@
                 minimizeBtn.style.fontSize = '12px';
                 minimizeBtn.style.width = 'auto';
                 minimizeBtn.style.marginTop = '0';
-                
+
                 newHeaderRight.appendChild(newVersionBadge);
                 newHeaderRight.appendChild(minimizeBtn);
-                
+
                 header.appendChild(newHeaderLeft);
                 header.appendChild(newHeaderRight);
-                
+
                 GM_setValue('wts_panel_minimized', false);
             } else {
                 // Minimize to improved left-side tab
@@ -2178,14 +2177,14 @@
                 panel.style.maxWidth = '';
                 panel.style.borderRadius = '0 16px 16px 0';
                 panel.style.boxShadow = '2px 0 12px rgba(0, 112, 74, 0.3)';
-                
+
                 // Update header for minimized state
                 header.style.flexDirection = 'column';
                 header.style.justifyContent = 'center';
                 header.style.padding = '16px 8px';
                 header.style.height = '100%';
                 header.style.borderRadius = '0 16px 16px 0';
-                
+
                 // Rebuild header content for minimized state
                 header.innerHTML = '';
                 const minimizedContent = document.createElement('div');
@@ -2195,7 +2194,7 @@
                 minimizedContent.style.justifyContent = 'center';
                 minimizedContent.style.height = '100%';
                 minimizedContent.style.gap = '12px';
-                
+
                 const minimizedTitle = document.createElement('div');
                 minimizedTitle.textContent = 'WTS';
                 minimizedTitle.style.fontSize = '14px';
@@ -2203,7 +2202,7 @@
                 minimizedTitle.style.color = '#ffffff';
                 minimizedTitle.style.textAlign = 'center';
                 minimizedTitle.style.letterSpacing = '1px';
-                
+
                 const minimizedSubtitle = document.createElement('div');
                 minimizedSubtitle.textContent = 'TOOLS';
                 minimizedSubtitle.style.fontSize = '10px';
@@ -2211,7 +2210,7 @@
                 minimizedSubtitle.style.color = 'rgba(255,255,255,0.8)';
                 minimizedSubtitle.style.textAlign = 'center';
                 minimizedSubtitle.style.letterSpacing = '0.5px';
-                
+
                 // Update minimize button for minimized state
                 minimizeBtn.textContent = '📋';
                 minimizeBtn.title = 'Expand Panel';
@@ -2220,12 +2219,12 @@
                 minimizeBtn.style.fontSize = '18px';
                 minimizeBtn.style.width = '100%';
                 minimizeBtn.style.marginTop = '8px';
-                
+
                 minimizedContent.appendChild(minimizedTitle);
                 minimizedContent.appendChild(minimizedSubtitle);
                 minimizedContent.appendChild(minimizeBtn);
                 header.appendChild(minimizedContent);
-                
+
                 GM_setValue('wts_panel_minimized', true);
             }
         };
@@ -2247,7 +2246,7 @@
             const rect = panel.getBoundingClientRect();
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
-            
+
             // Prevent text selection during drag
             e.preventDefault();
             document.body.style.userSelect = 'none';
@@ -2255,15 +2254,15 @@
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-            
+
             e.preventDefault();
             const x = e.clientX - dragOffset.x;
             const y = e.clientY - dragOffset.y;
-            
+
             // Keep panel within viewport bounds
             const maxX = window.innerWidth - panel.offsetWidth;
             const maxY = window.innerHeight - panel.offsetHeight;
-            
+
             panel.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
             panel.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
             panel.style.right = 'auto'; // Remove right positioning when dragging
@@ -2282,14 +2281,14 @@
             if (!currentlyMinimized) {
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
-                
+
                 // Recalculate responsive dimensions
                 const responsiveWidth = Math.min(Math.max(viewportWidth * 0.22, 320), 400);
-                
+
                 panel.style.width = `${responsiveWidth}px`;
                 panel.style.maxWidth = `${Math.min(viewportWidth * 0.4, 450)}px`;
                 panel.style.maxHeight = `${Math.min(viewportHeight * 0.85, 700)}px`;
-                
+
                 // Ensure panel stays within viewport bounds
                 const rect = panel.getBoundingClientRect();
                 if (rect.right > viewportWidth) {
@@ -2342,18 +2341,18 @@
             btn.style.transition = 'all 0.2s ease';
             btn.style.width = options.fullWidth ? '100%' : 'auto';
             btn.style.textAlign = 'center';
-            
+
             // Professional hover effects (color only)
             btn.addEventListener('mouseenter', () => {
                 btn.style.backgroundColor = adjustBrightness(color, 0.1);
                 btn.style.cursor = 'pointer'; // Ensure cursor stays as pointer on hover
             });
-            
+
             btn.addEventListener('mouseleave', () => {
                 btn.style.backgroundColor = color;
                 btn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
             });
-            
+
             btn.addEventListener('click', onClick);
             return btn;
         };
@@ -2381,50 +2380,50 @@
             group.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
             group.style.gap = '6px'; // Reduced from 8px
             group.style.marginBottom = '6px'; // Reduced from 8px
-            
+
             buttons.forEach(btn => group.appendChild(btn));
             return group;
         };
 
         // MAIN ACTIONS SECTION - Compact Two-Column Layout
         const actionsHeader = createSectionHeader('Actions');
-        
+
         const exportBtn = createButton('📦 Export Data', '#00704A', () => {
             console.log('📦 Export button clicked - using comprehensive data extraction');
-            
+
             const comprehensiveData = extractAllData();
-            
+
             const summary = `📊 Data Extraction Complete!\n\n` +
                 `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
                 `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
                 `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
                 `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
-            
+
             alert(summary);
-            
+
             if (comprehensiveData.totalVisibleASINs === 0 && comprehensiveData.totalShovelerASINs === 0) {
                 alert('No ASIN data found. Try scrolling or navigating through carousels.');
                 return;
             }
-            
+
             lastExtractedData = comprehensiveData;
             downloadXLSX(comprehensiveData);
         });
 
         const refreshBtn = createButton('🔄 Refresh Data', '#00704A', () => {
             console.log('🔄 Refresh button clicked - using comprehensive data extraction');
-            
+
             lastExtractedData = [];
             const comprehensiveData = extractAllData();
-            
+
             const summary = `🔄 Data Refresh Complete!\n\n` +
                 `Visible Cards: ${comprehensiveData.totalVisibleASINs} ASINs\n` +
                 `Empty Cards: ${comprehensiveData.emptyCards}\n` +
                 `Shoveler Carousels: ${comprehensiveData.totalShovelers}\n` +
                 `Shoveler ASINs: ${comprehensiveData.totalShovelerASINs}\n\n` +
                 `Total ASINs (Visible Cards Only): ${comprehensiveData.totalVisibleASINs}`;
-            
+
             alert(summary);
             lastExtractedData = comprehensiveData;
         });
@@ -2437,7 +2436,7 @@
         const versionCheckBtn = createButton('🔍 Updates', '#00704A', async () => {
             versionCheckBtn.textContent = '🔄 Checking...';
             versionCheckBtn.disabled = true;
-            
+
             try {
                 await checkForUpdates(true);
             } catch (error) {
@@ -2526,13 +2525,13 @@
         csrfSettingsBtn.style.marginTop = '6px'; // Reduced from 8px
         csrfSettingsBtn.style.boxShadow = 'none';
         csrfSettingsBtn.style.cursor = 'pointer'; // Ensure button has pointer cursor
-        
+
         // Professional hover effects (color only)
         csrfSettingsBtn.addEventListener('mouseenter', () => {
             csrfSettingsBtn.style.background = '#5a6268';
             csrfSettingsBtn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
         });
-        
+
         csrfSettingsBtn.addEventListener('mouseleave', () => {
             csrfSettingsBtn.style.background = '#6c757d';
             csrfSettingsBtn.style.cursor = 'pointer'; // Ensure cursor stays as pointer
@@ -3145,14 +3144,14 @@
         itemSearchInput.style.background = '#ffffff';
         itemSearchInput.style.color = '#495057';
         itemSearchInput.style.cursor = 'text'; // Ensure input has text cursor
-        
+
         // Professional focus effects (no animations)
         itemSearchInput.addEventListener('focus', () => {
             itemSearchInput.style.border = '2px solid #005A3C';
             itemSearchInput.style.outline = 'none';
             itemSearchInput.style.cursor = 'text'; // Ensure cursor stays as text
         });
-        
+
         itemSearchInput.addEventListener('blur', () => {
             itemSearchInput.style.border = '2px solid #00704A';
             itemSearchInput.style.cursor = 'text'; // Ensure cursor stays as text
@@ -3370,11 +3369,11 @@
 
         // SETTINGS SECTION - Collapsible
         const settingsHeader = createSectionHeader('Settings');
-        
+
         // Create collapsible settings container
         const settingsContainer = document.createElement('div');
         settingsContainer.style.marginTop = '6px'; // Reduced from 8px
-        
+
         // Settings toggle button
         const settingsToggleBtn = createButton('⚙️ Show Settings', '#6c757d', () => {
             const isHidden = settingsContent.style.display === 'none';
@@ -3449,7 +3448,7 @@
         // Add settings items to settings content
         settingsContent.appendChild(csrfSettingsBtn);
         settingsContent.appendChild(debugBtn);
-        
+
         settingsContainer.appendChild(settingsToggleBtn);
         settingsContainer.appendChild(settingsContent);
 
@@ -3459,14 +3458,14 @@
         // Assemble all content sections in compact layout
         contentContainer.appendChild(actionsHeader);
         contentContainer.appendChild(actionsGroup);
-        
+
         contentContainer.appendChild(navigationHeader);
         contentContainer.appendChild(asinInputContainer);
         contentContainer.appendChild(itemSearchContainer);
-        
+
         contentContainer.appendChild(settingsHeader);
         contentContainer.appendChild(settingsContainer);
-        
+
         contentContainer.appendChild(storeHeader);
         contentContainer.appendChild(statusDiv);
         contentContainer.appendChild(storeSelectContainer);
