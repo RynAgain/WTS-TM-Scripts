@@ -58,7 +58,7 @@ class ExcelExporter {
     async createResultsWorksheet(results) {
         const worksheet = this.workbook.addWorksheet('Scan Results');
         
-        // Define columns with enhanced data fields including variations and bundle data
+        // Define columns with enhanced data fields including variations, bundle data, and variable weight
         worksheet.columns = [
             { header: 'Store Code', key: 'store', width: 12 },
             { header: 'ASIN', key: 'asin', width: 15 },
@@ -72,6 +72,13 @@ class ExcelExporter {
             { header: 'Variations', key: 'variationCount', width: 12 },
             { header: 'Is Bundle', key: 'isBundle', width: 12 },
             { header: 'Bundle Parts', key: 'bundlePartsCount', width: 14 },
+            // Variable Weight columns
+            { header: 'Variable Weight', key: 'isVariableWeight', width: 16 },
+            { header: 'Price Per Unit', key: 'pricePerUnit', width: 16 },
+            { header: 'Weight Unit', key: 'weightUnit', width: 12 },
+            { header: 'Est. Total Price', key: 'estimatedTotalPrice', width: 18 },
+            { header: 'Min Weight', key: 'minimumWeight', width: 12 },
+            { header: 'Min Weight Unit', key: 'minimumWeightUnit', width: 16 },
             { header: 'Status', key: 'status', width: 12 },
             { header: 'Load Time (ms)', key: 'loadTime', width: 15 },
             { header: 'Error Message', key: 'error', width: 50 },
@@ -104,6 +111,13 @@ class ExcelExporter {
                 variationCount: result.variationCount || 0,
                 isBundle: result.isBundle ? 'YES' : 'NO',
                 bundlePartsCount: result.bundlePartsCount || 0,
+                // Variable Weight data
+                isVariableWeight: result.isVariableWeight ? 'YES' : 'NO',
+                pricePerUnit: result.variableWeightData?.pricePerUnit || 'N/A',
+                weightUnit: result.variableWeightData?.unit || 'N/A',
+                estimatedTotalPrice: result.variableWeightData?.estimatedTotalPrice || 'N/A',
+                minimumWeight: result.variableWeightData?.minimumWeight || 'N/A',
+                minimumWeightUnit: result.variableWeightData?.minimumWeightUnit || 'N/A',
                 status: result.success ? 'SUCCESS' : 'FAILED',
                 loadTime: result.loadTime || '',
                 error: result.error || '',
@@ -147,7 +161,7 @@ class ExcelExporter {
             }
             
             // Color code boolean fields (YES/NO)
-            ['hasNutritionFacts', 'hasIngredients', 'hasAddToCart', 'isBundle'].forEach(field => {
+            ['hasNutritionFacts', 'hasIngredients', 'hasAddToCart', 'isBundle', 'isVariableWeight'].forEach(field => {
                 const cell = row.getCell(field);
                 if (cell.value === 'YES') {
                     cell.fill = {
@@ -222,6 +236,11 @@ class ExcelExporter {
         const bundleItems = successfulResults.filter(r => r.isBundle).length;
         const totalBundleParts = successfulResults.reduce((sum, r) => sum + (r.bundlePartsCount || 0), 0);
         const avgBundlePartsPerItem = bundleItems > 0 ? (totalBundleParts / bundleItems).toFixed(1) : 0;
+        // Variable Weight statistics
+        const variableWeightItems = successfulResults.filter(r => r.isVariableWeight).length;
+        const vwWithPricePerUnit = successfulResults.filter(r => r.isVariableWeight && r.variableWeightData?.pricePerUnit && r.variableWeightData.pricePerUnit !== 'N/A').length;
+        const vwWithEstimatedTotal = successfulResults.filter(r => r.isVariableWeight && r.variableWeightData?.estimatedTotalPrice && r.variableWeightData.estimatedTotalPrice !== 'N/A').length;
+        const vwWithMinWeight = successfulResults.filter(r => r.isVariableWeight && r.variableWeightData?.minimumWeight && r.variableWeightData.minimumWeight !== 'N/A').length;
         
         // Create summary table
         const summaryData = [
@@ -249,6 +268,12 @@ class ExcelExporter {
             ['Total Bundle Parts', totalBundleParts],
             ['Avg Bundle Parts per Bundle', avgBundlePartsPerItem],
             ['', ''],
+            ['Variable Weight Analysis', ''],
+            ['Variable Weight Items', `${variableWeightItems} (${successfulResults.length > 0 ? ((variableWeightItems / successfulResults.length) * 100).toFixed(1) : 0}%)`],
+            ['VW with Price Per Unit', `${vwWithPricePerUnit} (${variableWeightItems > 0 ? ((vwWithPricePerUnit / variableWeightItems) * 100).toFixed(1) : 0}%)`],
+            ['VW with Estimated Total', `${vwWithEstimatedTotal} (${variableWeightItems > 0 ? ((vwWithEstimatedTotal / variableWeightItems) * 100).toFixed(1) : 0}%)`],
+            ['VW with Minimum Weight', `${vwWithMinWeight} (${variableWeightItems > 0 ? ((vwWithMinWeight / variableWeightItems) * 100).toFixed(1) : 0}%)`],
+            ['', ''],
             ['Status Breakdown', ''],
             ['✅ Success', successfulItems],
             ['❌ Failed', failedItems]
@@ -269,12 +294,12 @@ class ExcelExporter {
             }
             
             // Style section headers
-            if (row[0] === 'Status Breakdown' || row[0] === 'Data Extraction Summary') {
+            if (row[0] === 'Status Breakdown' || row[0] === 'Data Extraction Summary' || row[0] === 'Variable Weight Analysis') {
                 wsRow.font = { bold: true, color: { argb: '366092' } };
             }
             
             // Style data rows
-            if (index > 1 && row[0] && row[1] && row[0] !== 'Status Breakdown') {
+            if (index > 1 && row[0] && row[1] && row[0] !== 'Status Breakdown' && row[0] !== 'Variable Weight Analysis') {
                 wsRow.getCell(1).font = { bold: true };
             }
         });
