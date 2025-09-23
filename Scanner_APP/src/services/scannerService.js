@@ -1445,10 +1445,13 @@ class ScannerService {
                     result.isBundle = productData.isBundle || false;
                     result.bundlePartsCount = productData.bundlePartsCount || 0;
                     result.bundleParts = productData.bundleParts || [];
+                    // Variable Weight Data
+                    result.isVariableWeight = productData.isVariableWeight || false;
+                    result.variableWeightData = productData.variableWeightData || null;
                     result.extractionDetails = productData.extractionDetails;
                     
                     console.log(`✅ ${agent.id} completed: ${storeCode} - ${item.asin} (${result.loadTime}ms)`);
-                    console.log(`📊 Data: Name="${productData.name}", Price="${productData.price}", Nutrition=${productData.hasNutritionFacts}, Ingredients=${productData.hasIngredients}, AddToCart=${productData.hasAddToCart}, Variations=${productData.variationCount}, Bundle=${productData.isBundle}, BundleParts=${productData.bundlePartsCount}`);
+                    console.log(`📊 Data: Name="${productData.name}", Price="${productData.price}", Nutrition=${productData.hasNutritionFacts}, Ingredients=${productData.hasIngredients}, AddToCart=${productData.hasAddToCart}, Variations=${productData.variationCount}, Bundle=${productData.isBundle}, BundleParts=${productData.bundlePartsCount}, VariableWeight=${productData.isVariableWeight}${productData.isVariableWeight ? `, VW_PricePerUnit="${productData.variableWeightData.pricePerUnit}", VW_Unit="${productData.variableWeightData.unit}", VW_EstTotal="${productData.variableWeightData.estimatedTotalPrice}", VW_MinWeight="${productData.variableWeightData.minimumWeight} ${productData.variableWeightData.minimumWeightUnit}"` : ''}`);
                 } else {
                     result.error = 'Item page not found or error page';
                     console.log(`❌ ${agent.id} - ${storeCode} - ${item.asin} - Error page detected`);
@@ -1565,11 +1568,12 @@ class ScannerService {
                 }
             ];
             
-            // Price Extraction (multiple strategies)
+            // Price Extraction (multiple strategies) - Enhanced for Variable Weight
             const priceSelectors = [
                 {
                     method: 'textContent',
                     selectors: [
+                        'div.bds--heading-4', // Variable weight price container like "$9.34/lb | Total est. price: $28.02*"
                         'span.text-left.bds--heading-5', // Exact match from example
                         'span[class*="bds--heading-5"]', // Partial class match
                         'span[class*="heading-5"]',
@@ -1652,6 +1656,83 @@ class ScannerService {
             // Extract all data
             const productName = trySelectors(nameSelectors, 'name');
             const price = trySelectors(priceSelectors, 'price');
+            
+            // Variable Weight Detection and Extraction
+            let isVariableWeight = false;
+            let variableWeightData = {
+                pricePerUnit: null,
+                unit: null,
+                estimatedTotalPrice: null,
+                minimumWeight: null,
+                minimumWeightUnit: null
+            };
+            
+            // Check if this is a variable weight item by looking for price per weight patterns
+            if (price) {
+                // Pattern: "$9.34/lb | Total est. price: $28.02*"
+                const variableWeightMatch = price.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)\s*\|\s*Total est\. price:\s*\$(\d+\.?\d*)/i);
+                if (variableWeightMatch) {
+                    isVariableWeight = true;
+                    variableWeightData.pricePerUnit = `$${variableWeightMatch[1]}`;
+                    variableWeightData.unit = variableWeightMatch[2].toLowerCase();
+                    variableWeightData.estimatedTotalPrice = `$${variableWeightMatch[3]}`;
+                    extractionDetails.selectors.variableWeight = 'price-text-pattern-match';
+                }
+            }
+            
+            // If not found in price, look for variable weight indicators in dedicated elements
+            if (!isVariableWeight) {
+                const variableWeightElements = document.querySelectorAll('div.bds--heading-4, div[class*="heading-4"]');
+                for (const element of variableWeightElements) {
+                    const text = element.textContent?.trim();
+                    if (text) {
+                        // Pattern: "$9.34/lb | Total est. price: $28.02*"
+                        const match = text.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)\s*\|\s*Total est\. price:\s*\$(\d+\.?\d*)/i);
+                        if (match) {
+                            isVariableWeight = true;
+                            variableWeightData.pricePerUnit = `$${match[1]}`;
+                            variableWeightData.unit = match[2].toLowerCase();
+                            variableWeightData.estimatedTotalPrice = `$${match[3]}`;
+                            extractionDetails.selectors.variableWeight = 'dedicated-element-search';
+                            break;
+                        }
+                        
+                        // Alternative pattern: just price per unit without total
+                        const simpleMatch = text.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)/i);
+                        if (simpleMatch) {
+                            isVariableWeight = true;
+                            variableWeightData.pricePerUnit = `$${simpleMatch[1]}`;
+                            variableWeightData.unit = simpleMatch[2].toLowerCase();
+                            extractionDetails.selectors.variableWeight = 'simple-price-per-unit';
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Extract minimum weight requirements from buttons
+            if (isVariableWeight) {
+                const weightButtons = document.querySelectorAll('button[data-csa-c-type="VW"]');
+                for (const button of weightButtons) {
+                    const contentId = button.getAttribute('data-csa-c-content-id');
+                    if (contentId) {
+                        // Pattern: "3.00 lb"
+                        const weightMatch = contentId.match(/(\d+\.?\d*)\s*(lb|oz|kg|g)/i);
+                        if (weightMatch) {
+                            variableWeightData.minimumWeight = parseFloat(weightMatch[1]);
+                            variableWeightData.minimumWeightUnit = weightMatch[2].toLowerCase();
+                            extractionDetails.selectors.minimumWeight = 'button[data-csa-c-type="VW"]';
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            extractionDetails.variableWeight = {
+                isVariableWeight: isVariableWeight,
+                data: variableWeightData,
+                detectionMethod: isVariableWeight ? extractionDetails.selectors.variableWeight : null
+            };
             
             // For nutrition and ingredients, we need to check text content
             let hasNutritionFacts = false;
@@ -1792,6 +1873,9 @@ class ScannerService {
                 isBundle: isBundle,
                 bundlePartsCount: bundlePartsCount,
                 bundleParts: bundleParts,
+                // Variable Weight Data
+                isVariableWeight: isVariableWeight,
+                variableWeightData: variableWeightData,
                 extractionDetails: extractionDetails
             };
         });
@@ -2384,10 +2468,13 @@ class ScannerService {
                     result.isBundle = productData.isBundle || false;
                     result.bundlePartsCount = productData.bundlePartsCount || 0;
                     result.bundleParts = productData.bundleParts || [];
+                    // Variable Weight Data
+                    result.isVariableWeight = productData.isVariableWeight || false;
+                    result.variableWeightData = productData.variableWeightData || null;
                     result.extractionDetails = productData.extractionDetails;
                     
                     console.log(`✅ ${item.store} - ${item.asin} loaded successfully (${result.loadTime}ms)`);
-                    console.log(`📊 Data: Name="${productData.name}", Price="${productData.price}", Nutrition=${productData.hasNutritionFacts}, Ingredients=${productData.hasIngredients}, AddToCart=${productData.hasAddToCart}, Variations=${productData.variationCount}, Bundle=${productData.isBundle}, BundleParts=${productData.bundlePartsCount}`);
+                    console.log(`📊 Data: Name="${productData.name}", Price="${productData.price}", Nutrition=${productData.hasNutritionFacts}, Ingredients=${productData.hasIngredients}, AddToCart=${productData.hasAddToCart}, Variations=${productData.variationCount}, Bundle=${productData.isBundle}, BundleParts=${productData.bundlePartsCount}, VariableWeight=${productData.isVariableWeight}${productData.isVariableWeight ? `, VW_PricePerUnit="${productData.variableWeightData.pricePerUnit}", VW_Unit="${productData.variableWeightData.unit}", VW_EstTotal="${productData.variableWeightData.estimatedTotalPrice}", VW_MinWeight="${productData.variableWeightData.minimumWeight} ${productData.variableWeightData.minimumWeightUnit}"` : ''}`);
                 } else {
                     result.error = 'Item page not found or error page';
                     console.log(`❌ ${item.store} - ${item.asin} - Error page detected`);
@@ -2501,11 +2588,12 @@ class ScannerService {
                 }
             ];
             
-            // Price Extraction (multiple strategies)
+            // Price Extraction (multiple strategies) - Enhanced for Variable Weight
             const priceSelectors = [
                 {
                     method: 'textContent',
                     selectors: [
+                        'div.bds--heading-4', // Variable weight price container like "$9.34/lb | Total est. price: $28.02*"
                         'span.text-left.bds--heading-5', // Exact match from example
                         'span[class*="bds--heading-5"]', // Partial class match
                         'span[class*="heading-5"]',
@@ -2588,6 +2676,83 @@ class ScannerService {
             // Extract all data
             const productName = trySelectors(nameSelectors, 'name');
             const price = trySelectors(priceSelectors, 'price');
+            
+            // Variable Weight Detection and Extraction
+            let isVariableWeight = false;
+            let variableWeightData = {
+                pricePerUnit: null,
+                unit: null,
+                estimatedTotalPrice: null,
+                minimumWeight: null,
+                minimumWeightUnit: null
+            };
+            
+            // Check if this is a variable weight item by looking for price per weight patterns
+            if (price) {
+                // Pattern: "$9.34/lb | Total est. price: $28.02*"
+                const variableWeightMatch = price.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)\s*\|\s*Total est\. price:\s*\$(\d+\.?\d*)/i);
+                if (variableWeightMatch) {
+                    isVariableWeight = true;
+                    variableWeightData.pricePerUnit = `$${variableWeightMatch[1]}`;
+                    variableWeightData.unit = variableWeightMatch[2].toLowerCase();
+                    variableWeightData.estimatedTotalPrice = `$${variableWeightMatch[3]}`;
+                    extractionDetails.selectors.variableWeight = 'price-text-pattern-match';
+                }
+            }
+            
+            // If not found in price, look for variable weight indicators in dedicated elements
+            if (!isVariableWeight) {
+                const variableWeightElements = document.querySelectorAll('div.bds--heading-4, div[class*="heading-4"]');
+                for (const element of variableWeightElements) {
+                    const text = element.textContent?.trim();
+                    if (text) {
+                        // Pattern: "$9.34/lb | Total est. price: $28.02*"
+                        const match = text.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)\s*\|\s*Total est\. price:\s*\$(\d+\.?\d*)/i);
+                        if (match) {
+                            isVariableWeight = true;
+                            variableWeightData.pricePerUnit = `$${match[1]}`;
+                            variableWeightData.unit = match[2].toLowerCase();
+                            variableWeightData.estimatedTotalPrice = `$${match[3]}`;
+                            extractionDetails.selectors.variableWeight = 'dedicated-element-search';
+                            break;
+                        }
+                        
+                        // Alternative pattern: just price per unit without total
+                        const simpleMatch = text.match(/\$(\d+\.?\d*)\/(lb|oz|kg|g)/i);
+                        if (simpleMatch) {
+                            isVariableWeight = true;
+                            variableWeightData.pricePerUnit = `$${simpleMatch[1]}`;
+                            variableWeightData.unit = simpleMatch[2].toLowerCase();
+                            extractionDetails.selectors.variableWeight = 'simple-price-per-unit';
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Extract minimum weight requirements from buttons
+            if (isVariableWeight) {
+                const weightButtons = document.querySelectorAll('button[data-csa-c-type="VW"]');
+                for (const button of weightButtons) {
+                    const contentId = button.getAttribute('data-csa-c-content-id');
+                    if (contentId) {
+                        // Pattern: "3.00 lb"
+                        const weightMatch = contentId.match(/(\d+\.?\d*)\s*(lb|oz|kg|g)/i);
+                        if (weightMatch) {
+                            variableWeightData.minimumWeight = parseFloat(weightMatch[1]);
+                            variableWeightData.minimumWeightUnit = weightMatch[2].toLowerCase();
+                            extractionDetails.selectors.minimumWeight = 'button[data-csa-c-type="VW"]';
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            extractionDetails.variableWeight = {
+                isVariableWeight: isVariableWeight,
+                data: variableWeightData,
+                detectionMethod: isVariableWeight ? extractionDetails.selectors.variableWeight : null
+            };
             
             // For nutrition and ingredients, we need to check text content
             let hasNutritionFacts = false;
@@ -2728,6 +2893,9 @@ class ScannerService {
                 isBundle: isBundle,
                 bundlePartsCount: bundlePartsCount,
                 bundleParts: bundleParts,
+                // Variable Weight Data
+                isVariableWeight: isVariableWeight,
+                variableWeightData: variableWeightData,
                 extractionDetails: extractionDetails
             };
         });
