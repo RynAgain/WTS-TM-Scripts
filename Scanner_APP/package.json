@@ -6,7 +6,10 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "build": "electron-builder --win",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
     "postinstall": "echo Skipping Playwright browser download (Route B: download on first run)"
   },
   "keywords": [
@@ -41,7 +44,6 @@
       "package.json"
     ],
     "win": {
-      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -58,6 +60,30 @@
       ],
       "requestedExecutionLevel": "asInvoker"
     },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "dir",
+          "arch": ["x64"]
+        }
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
@@ -67,6 +93,8 @@
     "nodeGypRebuild": false,
     "buildDependenciesFromSource": false,
     "npmRebuild": false,
-    "forceCodeSigning": false
+    "forceCodeSigning": false,
+    "afterSign": null,
+    "afterAllArtifactBuild": null
   }
 }
