@@ -1,14 +1,18 @@
 // ==UserScript==
 // @name         Amazon Location Switcher v2
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.0.0
 // @description  Switch between Amazon/Whole Foods locations using uploaded store map
-// @author       You
+// @author       RynAgain
 // @match        https://www.amazon.com/*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+// @updateURL    https://github.com/RynAgain/WTS-TM-Scripts/raw/refs/heads/main/Amazon_Store_Jumper/amazon_location_switcher_v2.user.js
+// @downloadURL  https://github.com/RynAgain/WTS-TM-Scripts/raw/refs/heads/main/Amazon_Store_Jumper/amazon_location_switcher_v2.user.js
+// @supportURL   https://github.com/RynAgain/WTS-TM-Scripts/issues
+// @homepageURL  https://github.com/RynAgain/WTS-TM-Scripts
 // ==/UserScript==
 
 (function() {

@@ -9,10 +9,11 @@ A Tampermonkey userscript that allows you to quickly switch between Amazon/Whole
 - **CSV/XLSX Upload**: Upload a complete store map from CSV or Excel files
 - **TLC Display**: Shows three-letter store codes (TLC) for easy identification
 - **Persistent Storage**: Store map is saved locally and persists across sessions
-- **CSRF Token Management**: Automatically captures and maintains anti-CSRF tokens
+- **CSRF Token Management**: Automatically captures and maintains anti-CSRF tokens every 5 seconds
 - **Search Functionality**: Quickly find stores by TLC, name, or city
 - **Active/Inactive Status**: Visual indication of store status
-- **Improved UI**: Cleaner, more intuitive interface
+- **Smart Region ID Handling**: Automatically tries with and without region ID for maximum compatibility
+- **Improved UI**: Cleaner, more intuitive interface with real-time store count
 
 ## Installation
 
@@ -35,7 +36,7 @@ A Tampermonkey userscript that allows you to quickly switch between Amazon/Whole
      - `city` - City location
      - `state` - State location
      - `is_active` - Active status (true/false or 1/0)
-     - `region_id` - Region ID (optional, may not be required)
+     - `region_id` - Region ID (optional - script will try without it first, then with it if needed)
 
 2. **Upload the Store Map**
    - Click the "📍 Store Switcher" button
@@ -72,8 +73,19 @@ A Tampermonkey userscript that allows you to quickly switch between Amazon/Whole
 
 The script automatically:
 - Captures the anti-CSRF token on page load
-- Updates the token every 5 seconds
-- Uses the latest token when switching locations
+- Updates the token every 5 seconds in the background
+- Stores the token persistently using Tampermonkey storage
+- Retrieves a fresh token before each location switch attempt
+- Uses the latest token in both request headers and body
+
+### Smart Region ID Handling
+
+The location switching logic is intelligent:
+1. **First Attempt**: Tries to switch using only the `pickup_address_id` (without `region_id`)
+2. **Automatic Retry**: If the first attempt fails and a `region_id` exists, automatically retries with it included
+3. **Console Logging**: Both attempts are logged so you can see which method works for your stores
+
+This ensures maximum compatibility whether Amazon requires the region ID or not.
 
 ### Store Data Structure
 
@@ -114,9 +126,12 @@ WABC,addr123,Store Name,City,ST,true,region1
 
 ### Switching Issues
 
-- **Switch fails**: The script will automatically try to get a fresh CSRF token
-- **Page doesn't reload**: Check browser console for errors
-- **Wrong location**: Verify the `pickup_address_id` in your uploaded data
+- **Switch fails**:
+  - The script automatically tries without `region_id` first, then with it if available
+  - Check browser console for detailed error messages
+  - Verify CSRF token is being captured (look for "CSRF token updated" in console)
+- **Page doesn't reload**: Check browser console for errors and response status
+- **Wrong location**: Verify the `pickup_address_id` in your uploaded data matches Amazon's expected format
 
 ### Storage Issues
 
@@ -152,10 +167,12 @@ Tested and working on:
 
 ## Notes
 
-- The `region_id` field is included in the data structure but may not be required for switching
+- The `region_id` field is optional - the script intelligently tries without it first, then with it if needed
 - Inactive stores are shown with reduced opacity but can still be selected
 - The script only works on amazon.com domains
 - Store map is stored locally in your browser - not synced across devices
+- CSRF tokens are automatically managed - no manual intervention needed
+- Console logging provides detailed debugging information for troubleshooting
 
 ## Support
 
